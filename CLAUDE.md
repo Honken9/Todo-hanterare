@@ -2,24 +2,34 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository status
+## Stack
 
-This repository is currently empty — no source files, build configuration, or documentation exist yet. The project name "Todo-hanterare" (Swedish for "Todo manager") suggests an intended task/todo management application, but no implementation choices have been made.
+React 18 + TypeScript + Vite. Tests with Vitest + Testing Library (jsdom). ESLint flat config. No backend — todos persist in `localStorage`.
 
-## When starting work here
+## Commands
 
-Because nothing has been scaffolded yet, the first task in any new session is to confirm with the user:
+- `npm run dev` — Vite dev server
+- `npm run build` — type-check (`tsc -b`) then production bundle to `dist/`
+- `npm run preview` — serve the built bundle
+- `npm run lint` — ESLint over the repo
+- `npm test` — Vitest one-shot run
+- `npm run test:watch` — Vitest watch mode
+- Single test: `npx vitest run src/todos.test.ts` (or `-t "<name pattern>"` to filter by test name)
 
-- Target language and runtime (e.g. TypeScript/Node, Python, Go, etc.)
-- Whether this is a CLI, web app (frontend/backend split), mobile app, or library
-- Storage approach (in-memory, SQLite, hosted DB, file-based)
-- Testing framework preference
+## Architecture
 
-Do not assume a stack and scaffold one unprompted — the choice will shape every subsequent decision.
+- `src/types.ts` — `Todo` and `Filter` types shared across modules.
+- `src/todos.ts` — pure functions for todo operations (`createTodo`, `toggle`, `remove`, `rename`, `clearDone`, `applyFilter`). All return new arrays; no mutation. This is where business logic lives and where unit tests target.
+- `src/storage.ts` — `loadTodos` / `saveTodos` wrap `localStorage` under the key `todo-hanterare:todos:v1`. `loadTodos` validates each entry and silently drops malformed data (corrupt storage should never crash the app). Bump the key suffix when the `Todo` shape changes.
+- `src/App.tsx` — single component. Holds state via `useState`, persists on every change via a `useEffect` that calls `saveTodos`. Calls into `src/todos.ts` for every mutation, so the component stays thin.
+- `src/main.tsx` — React entry, mounts `<App />` into `#root`.
 
-## Updating this file
+Two config files exist on purpose: `vite.config.ts` is used by the dev server and `tsc -b`, while `vitest.config.ts` is used only by Vitest. Keeping them split avoids a known type conflict between Vite's types and the nested copy of Vite that ships inside Vitest. Don't merge them back into one file unless the underlying versions are aligned.
 
-Once the project is scaffolded, replace this section with:
-- Common commands (build, lint, test, run a single test, dev server)
-- High-level architecture that spans multiple files
-- Any non-obvious conventions adopted by the project
+`tsconfig.node.json` deliberately excludes `vitest.config.ts` for the same reason — `tsc -b` only type-checks `vite.config.ts`.
+
+## Conventions
+
+- Keep todo logic pure in `src/todos.ts` and unit-test it there. UI-level behaviour (filtering tabs, persistence wiring) is covered in `src/App.test.tsx`.
+- UI strings are in Swedish (matches the project name).
+- IDs come from `crypto.randomUUID()` — assume a modern browser; no polyfill.
