@@ -3,12 +3,14 @@ import type { Session } from '@supabase/supabase-js';
 import type { Filter, Profile, Todo } from './types';
 import { supabase } from './lib/supabase';
 import {
+  changePassword,
   deleteProfile,
   deleteTodo,
   fetchMyProfile,
   fetchProfiles,
   fetchTodos,
   insertTodo,
+  inviteUser,
   subscribeChanges,
   updateProfile,
   updateTodo,
@@ -16,6 +18,7 @@ import {
 import { findProfile, profileLabel } from './profiles';
 import { applyFilter, cloneAsActive } from './todos';
 import Auth from './Auth';
+import SetPassword, { type SetPasswordReason } from './SetPassword';
 
 const dueFormatter = new Intl.DateTimeFormat('sv-SE', {
   dateStyle: 'short',
@@ -44,9 +47,22 @@ const FILTER_LABELS: Record<Filter, string> = {
   archive: 'Arkiv',
 };
 
+function detectHashReason(): SetPasswordReason | null {
+  const hash = window.location.hash;
+  if (!hash) return null;
+  const params = new URLSearchParams(hash.slice(1));
+  const type = params.get('type');
+  if (type === 'invite') return 'invite';
+  if (type === 'recovery') return 'recovery';
+  return null;
+}
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [setPwdReason, setSetPwdReason] = useState<SetPasswordReason | null>(
+    () => detectHashReason(),
+  );
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -54,7 +70,10 @@ export default function App() {
       setAuthLoading(false);
     });
     const { data: subscription } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
+      (event, newSession) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setSetPwdReason('recovery');
+        }
         setSession(newSession);
       },
     );
@@ -63,6 +82,10 @@ export default function App() {
 
   if (authLoading) return <main className="app">Laddar…</main>;
   if (!session) return <Auth />;
+  if (setPwdReason)
+    return (
+      <SetPassword reason={setPwdReason} onDone={() => setSetPwdReason(null)} />
+    );
   return <Workspace session={session} />;
 }
 
@@ -83,6 +106,15 @@ function Workspace({ session }: { session: Session }) {
   const [editingText, setEditingText] = useState('');
   const [showAdmin, setShowAdmin] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const [pwdDraft, setPwdDraft] = useState('');
+  const [pwdConfirm, setPwdConfirm] = useState('');
+  const [pwdStatus, setPwdStatus] = useState<'idle' | 'saving' | 'saved'>(
+    'idle',
+  );
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteStatus, setInviteStatus] = useState<
+    'idle' | 'sending' | 'sent'
+  >('idle');
 
   const reloadProfiles = useCallback(async () => {
     try {
@@ -263,6 +295,46 @@ function Workspace({ session }: { session: Session }) {
     }
   }
 
+  async function handleChangePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (pwdDraft.length < 8) {
+      setError('Lösenordet måste vara minst 8 tecken.');
+      return;
+    }
+    if (pwdDraft !== pwdConfirm) {
+      setError('Lösenorden matchar inte.');
+      return;
+    }
+    setPwdStatus('saving');
+    try {
+      await changePassword(pwdDraft);
+      setPwdDraft('');
+      setPwdConfirm('');
+      setPwdStatus('saved');
+      setTimeout(() => setPwdStatus('idle'), 3000);
+    } catch (err) {
+      setPwdStatus('idle');
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault();
+    const email = inviteEmail.trim();
+    if (!email) return;
+    setInviteStatus('sending');
+    try {
+      await inviteUser(email);
+      setInviteEmail('');
+      setInviteStatus('sent');
+      setTimeout(() => setInviteStatus('idle'), 4000);
+      void reloadProfiles();
+    } catch (err) {
+      setInviteStatus('idle');
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function handleToggleAdmin(profile: Profile) {
     try {
       await updateProfile(profile.id, { isAdmin: !profile.isAdmin });
@@ -325,7 +397,7 @@ function Workspace({ session }: { session: Session }) {
       )}
 
       <section className="profile-edit">
-        <h2>Ditt namn</h2>
+        <h2>Mitt konto</h2>
         <form
           className="composer"
           onSubmit={(e) => {
@@ -345,17 +417,73 @@ function Workspace({ session }: { session: Session }) {
               !nameDraft.trim() || nameDraft.trim() === me.displayName
             }
           >
-            Spara
+            Spara namn
           </button>
         </form>
+        <details className="password-change">
+          <summary>Byt lösenord</summary>
+          <form className="auth-form" onSubmit={(e) => void handleChangePassword(e)}>
+            <label className="col">
+              <span className="col-header">Nytt lösenord</span>
+              <input
+                type="password"
+                value={pwdDraft}
+                onChange={(e) => setPwdDraft(e.target.value)}
+                minLength={8}
+                disabled={pwdStatus === 'saving'}
+              />
+            </label>
+            <label className="col">
+              <span className="col-header">Bekräfta</span>
+              <input
+                type="password"
+                value={pwdConfirm}
+                onChange={(e) => setPwdConfirm(e.target.value)}
+                disabled={pwdStatus === 'saving'}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={
+                !pwdDraft || !pwdConfirm || pwdStatus === 'saving'
+              }
+            >
+              {pwdStatus === 'saving' ? 'Sparar…' : 'Byt lösenord'}
+            </button>
+          </form>
+          {pwdStatus === 'saved' && (
+            <p className="auth-success">Lösenordet uppdaterat.</p>
+          )}
+        </details>
       </section>
 
       {showAdmin && me.isAdmin && (
         <section className="admin">
           <h2>Användare (admin)</h2>
-          <p className="hint">
-            Bjud in nya användare via Supabase: <em>Authentication → Users → Invite user</em>.
-          </p>
+          <form
+            className="composer"
+            onSubmit={(e) => void handleInvite(e)}
+          >
+            <input
+              type="email"
+              aria-label="Bjud in via e-post"
+              placeholder="namn@exempel.se"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              disabled={inviteStatus === 'sending'}
+            />
+            <button
+              type="submit"
+              disabled={!inviteEmail.trim() || inviteStatus === 'sending'}
+            >
+              {inviteStatus === 'sending' ? 'Skickar…' : 'Bjud in'}
+            </button>
+          </form>
+          {inviteStatus === 'sent' && (
+            <p className="auth-success">
+              Inbjudan skickad. Personen får ett mejl med länk för att sätta lösenord.
+            </p>
+          )}
           <ul className="profile-list">
             {profiles.map((p) => (
               <li key={p.id} className={p.id === me.id ? 'me' : ''}>

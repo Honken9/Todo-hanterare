@@ -25,7 +25,14 @@ VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key>
 ```
 
-In Vercel, set the same two variables under **Settings → Environment Variables**.
+In Vercel, set the same two variables under **Settings → Environment Variables**, plus two more for the `/api/invite` Edge Function:
+
+```
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service_role key — keep secret!>
+```
+
+The service role key is in Supabase → Settings → API → "service_role". It bypasses RLS, so it must never be exposed to the client.
 
 ## Architecture
 
@@ -33,8 +40,14 @@ In Vercel, set the same two variables under **Settings → Environment Variables
 - `src/todos.ts` / `src/profiles.ts` — pure helper functions. `applyFilter`, `cloneAsActive`, `findProfile`, `profileLabel`. Used for client-side filtering and rendering. Mutations go through Supabase, not these helpers.
 - `src/lib/supabase.ts` — Supabase client singleton. Reads env vars and throws if missing. Exports `ProfileRow` / `TodoRow` types matching the DB schema.
 - `src/api.ts` — async data layer. `fetchProfiles`, `fetchMyProfile`, `updateProfile`, `deleteProfile`, `fetchTodos`, `insertTodo`, `updateTodo`, `deleteTodo`, `subscribeChanges`. Translates between snake_case DB rows and camelCase app types (and between ISO timestamps and epoch ms).
-- `src/Auth.tsx` — magic link login screen. Calls `supabase.auth.signInWithOtp` and shows a "check your inbox" message.
-- `src/App.tsx` — top-level component. Listens to `supabase.auth.onAuthStateChange`; if no session, renders `<Auth />`, otherwise `<Workspace session={...}>`. `Workspace` fetches the current user's profile + the global lists, subscribes to real-time changes, and uses optimistic updates that revert on API errors.
+- `src/Auth.tsx` — email + password login. Two modes (`login` / `reset`). Reset calls `supabase.auth.resetPasswordForEmail`.
+- `src/SetPassword.tsx` — full-screen "set your password" form rendered after an invite or recovery link is clicked. Calls `supabase.auth.updateUser({ password })` then clears `window.location.hash`.
+- `api/invite.ts` — Vercel Edge Function. Verifies the caller's JWT with the service-role client, checks `profiles.is_admin`, then calls `supabase.auth.admin.inviteUserByEmail(email, { redirectTo: origin })`. Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from env.
+- `src/App.tsx` — top-level component. Listens to `supabase.auth.onAuthStateChange`. Routes to one of three views based on session + URL hash + auth event:
+  - `<Auth />` if no session
+  - `<SetPassword reason="invite|recovery">` if URL hash had `type=invite|recovery` on load, or if a `PASSWORD_RECOVERY` event fired
+  - `<Workspace session={...}>` otherwise.
+  `Workspace` fetches the current user's profile + the global lists, subscribes to real-time changes, and uses optimistic updates that revert on API errors. Admin section includes an invite form that POSTs to `/api/invite`.
 - `supabase/migrations/0001_initial_schema.sql` — original people/todos schema (superseded).
 - `supabase/migrations/0002_profiles_and_roles.sql` — current schema. Drops the old people table, creates `profiles` 1:1 with `auth.users`, an admin role flag, an auto-create trigger on signup (first user is admin), and a per-row visibility model in RLS.
 

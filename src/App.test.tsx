@@ -43,11 +43,11 @@ afterEach(() => {
 });
 
 describe('<App /> auth gate', () => {
-  it('renders the magic link login when not authenticated', async () => {
+  it('renders the password login when not authenticated', async () => {
     render(<App />);
     expect(
-      await screen.findByRole('button', { name: /Skicka länk/ }),
+      await screen.findByRole('button', { name: /Logga in/ }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('E-postadress')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Glömt lösenord/ })).toBeInTheDocument();
   });
 });

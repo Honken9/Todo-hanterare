@@ -119,6 +119,45 @@ export async function deleteTodo(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function inviteUser(email: string): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw new Error('Inte inloggad');
+
+  const res = await fetch('/api/invite', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      // ignore body parse error
+    }
+    throw new Error(message);
+  }
+}
+
+export async function changePassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
+export async function sendPasswordReset(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw error;
+}
+
 export type Subscriptions = { unsubscribe: () => void };
 
 export function subscribeChanges(handlers: {
