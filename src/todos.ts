@@ -16,6 +16,7 @@ export function createTodo(input: CreateTodoInput): Todo {
     createdBy: input.createdBy,
     assignedTo: input.assignedTo ?? null,
     dueAt: input.dueAt ?? null,
+    archivedAt: null,
   };
 }
 
@@ -55,18 +56,42 @@ export function clearAssignee(todos: Todo[], personId: string): Todo[] {
   );
 }
 
-export function clearDone(todos: Todo[]): Todo[] {
-  return todos.filter((t) => !t.done);
+export function archive(todos: Todo[], id: string, at: number = Date.now()): Todo[] {
+  return todos.map((t) =>
+    t.id === id ? { ...t, archivedAt: at, done: true } : t,
+  );
+}
+
+export function unarchive(todos: Todo[], id: string): Todo[] {
+  return todos.map((t) =>
+    t.id === id ? { ...t, archivedAt: null, done: false } : t,
+  );
+}
+
+export function archiveDone(todos: Todo[], at: number = Date.now()): Todo[] {
+  return todos.map((t) =>
+    t.done && t.archivedAt === null ? { ...t, archivedAt: at } : t,
+  );
+}
+
+export function cloneAsActive(source: Todo, createdBy: string): Todo {
+  return createTodo({
+    text: source.text,
+    createdBy,
+    assignedTo: source.assignedTo,
+  });
 }
 
 export function applyFilter(todos: Todo[], filter: Filter): Todo[] {
   switch (filter) {
     case 'active':
-      return todos.filter((t) => !t.done);
+      return todos.filter((t) => !t.done && t.archivedAt === null);
     case 'done':
-      return todos.filter((t) => t.done);
+      return todos.filter((t) => t.done && t.archivedAt === null);
+    case 'archive':
+      return todos.filter((t) => t.archivedAt !== null);
     case 'all':
     default:
-      return todos;
+      return todos.filter((t) => t.archivedAt === null);
   }
 }

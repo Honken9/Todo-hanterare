@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Filter } from './types';
+import type { Filter, Todo } from './types';
 import {
   loadMe,
   loadPeople,
@@ -11,17 +11,24 @@ import {
 import { createPerson, findPerson, removePerson } from './people';
 import {
   applyFilter,
+  archiveDone,
+  cloneAsActive,
   clearAssignee,
-  clearDone,
   createTodo,
   remove,
   rename,
   setAssignee,
   setDueAt,
   toggle,
+  unarchive,
 } from './todos';
 
 const dueFormatter = new Intl.DateTimeFormat('sv-SE', {
+  dateStyle: 'short',
+  timeStyle: 'short',
+});
+
+const archiveFormatter = new Intl.DateTimeFormat('sv-SE', {
   dateStyle: 'short',
   timeStyle: 'short',
 });
@@ -40,6 +47,13 @@ function inputValueToDue(value: string): number | null {
   const t = new Date(value).getTime();
   return Number.isNaN(t) ? null : t;
 }
+
+const FILTER_LABELS: Record<Filter, string> = {
+  all: 'Alla',
+  active: 'Aktiva',
+  done: 'Klara',
+  archive: 'Arkiv',
+};
 
 export default function App() {
   const [todos, setTodos] = useState(() => loadTodos());
@@ -66,7 +80,14 @@ export default function App() {
   }, [me]);
 
   const visible = useMemo(() => applyFilter(todos, filter), [todos, filter]);
-  const remaining = useMemo(() => todos.filter((t) => !t.done).length, [todos]);
+  const remaining = useMemo(
+    () => todos.filter((t) => !t.done && t.archivedAt === null).length,
+    [todos],
+  );
+  const doneCount = useMemo(
+    () => todos.filter((t) => t.done && t.archivedAt === null).length,
+    [todos],
+  );
 
   function handleAddPerson(e: React.FormEvent) {
     e.preventDefault();
@@ -102,6 +123,12 @@ export default function App() {
     setDraftAssignee('');
   }
 
+  function handleReuse(source: Todo) {
+    if (me === null) return;
+    setTodos((prev) => [cloneAsActive(source, me), ...prev]);
+    setFilter('all');
+  }
+
   function startEdit(id: string, current: string) {
     setEditingId(id);
     setEditingText(current);
@@ -116,6 +143,7 @@ export default function App() {
 
   const canAddTodo = me !== null && draft.trim().length > 0;
   const now = Date.now();
+  const isArchiveView = filter === 'archive';
 
   return (
     <main className="app">
@@ -215,7 +243,7 @@ export default function App() {
         </form>
 
         <div className="filters" role="tablist">
-          {(['all', 'active', 'done'] as const).map((f) => (
+          {(['all', 'active', 'done', 'archive'] as const).map((f) => (
             <button
               key={f}
               role="tab"
@@ -223,29 +251,37 @@ export default function App() {
               className={filter === f ? 'active' : ''}
               onClick={() => setFilter(f)}
             >
-              {f === 'all' ? 'Alla' : f === 'active' ? 'Aktiva' : 'Klara'}
+              {FILTER_LABELS[f]}
             </button>
           ))}
         </div>
 
         {visible.length === 0 ? (
-          <p className="empty">Inga uppgifter att visa.</p>
+          <p className="empty">
+            {isArchiveView
+              ? 'Arkivet är tomt.'
+              : 'Inga uppgifter att visa.'}
+          </p>
         ) : (
           <ul className="list">
             {visible.map((t) => {
               const creator = findPerson(people, t.createdBy);
+              const archived = t.archivedAt !== null;
               const overdue =
-                t.dueAt !== null && !t.done && t.dueAt < now;
+                !archived && t.dueAt !== null && !t.done && t.dueAt < now;
               return (
                 <li
                   key={t.id}
-                  className={`${t.done ? 'done' : ''} ${overdue ? 'overdue' : ''}`.trim()}
+                  className={`${t.done ? 'done' : ''} ${overdue ? 'overdue' : ''} ${archived ? 'archived' : ''}`
+                    .trim()
+                    .replace(/\s+/g, ' ')}
                 >
                   <div className="row">
                     <label className="check">
                       <input
                         type="checkbox"
                         checked={t.done}
+                        disabled={archived}
                         onChange={() =>
                           setTodos((prev) => toggle(prev, t.id))
                         }
@@ -266,58 +302,115 @@ export default function App() {
                           }}
                         />
                       ) : (
-                        <span onDoubleClick={() => startEdit(t.id, t.text)}>
+                        <span
+                          onDoubleClick={() =>
+                            !archived && startEdit(t.id, t.text)
+                          }
+                        >
                           {t.text}
                         </span>
                       )}
                     </label>
-                    <button
-                      aria-label={`Ta bort ${t.text}`}
-                      className="remove"
-                      onClick={() => setTodos((prev) => remove(prev, t.id))}
-                    >
-                      ×
-                    </button>
+                    {archived ? (
+                      <div className="row-actions">
+                        <button
+                          aria-label={`Använd igen ${t.text}`}
+                          onClick={() => handleReuse(t)}
+                          disabled={me === null}
+                        >
+                          Använd igen
+                        </button>
+                        <button
+                          aria-label={`Återställ ${t.text}`}
+                          className="ghost"
+                          onClick={() =>
+                            setTodos((prev) => unarchive(prev, t.id))
+                          }
+                        >
+                          Återställ
+                        </button>
+                        <button
+                          aria-label={`Ta bort ${t.text}`}
+                          className="remove"
+                          onClick={() =>
+                            setTodos((prev) => remove(prev, t.id))
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        aria-label={`Ta bort ${t.text}`}
+                        className="remove"
+                        onClick={() => setTodos((prev) => remove(prev, t.id))}
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                   <div className="meta">
                     <span className="creator">
                       Av: {creator ? creator.name : '(borttagen)'}
                     </span>
-                    <label>
-                      Ansvarig:{' '}
-                      <select
-                        aria-label={`Ansvarig för ${t.text}`}
-                        value={t.assignedTo ?? ''}
-                        onChange={(e) =>
-                          setTodos((prev) =>
-                            setAssignee(prev, t.id, e.target.value || null),
-                          )
-                        }
-                      >
-                        <option value="">— ingen —</option>
-                        {people.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Senast:{' '}
-                      <input
-                        aria-label={`Senast för ${t.text}`}
-                        type="datetime-local"
-                        value={dueToInputValue(t.dueAt)}
-                        onChange={(e) =>
-                          setTodos((prev) =>
-                            setDueAt(prev, t.id, inputValueToDue(e.target.value)),
-                          )
-                        }
-                      />
-                    </label>
-                    {t.dueAt !== null && (
-                      <span className="due-display">
-                        ({dueFormatter.format(new Date(t.dueAt))})
+                    {archived ? (
+                      <span className="archived-at">
+                        Arkiverat:{' '}
+                        {archiveFormatter.format(new Date(t.archivedAt!))}
+                      </span>
+                    ) : (
+                      <>
+                        <label>
+                          Ansvarig:{' '}
+                          <select
+                            aria-label={`Ansvarig för ${t.text}`}
+                            value={t.assignedTo ?? ''}
+                            onChange={(e) =>
+                              setTodos((prev) =>
+                                setAssignee(
+                                  prev,
+                                  t.id,
+                                  e.target.value || null,
+                                ),
+                              )
+                            }
+                          >
+                            <option value="">— ingen —</option>
+                            {people.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>
+                          Senast:{' '}
+                          <input
+                            aria-label={`Senast för ${t.text}`}
+                            type="datetime-local"
+                            value={dueToInputValue(t.dueAt)}
+                            onChange={(e) =>
+                              setTodos((prev) =>
+                                setDueAt(
+                                  prev,
+                                  t.id,
+                                  inputValueToDue(e.target.value),
+                                ),
+                              )
+                            }
+                          />
+                        </label>
+                        {t.dueAt !== null && (
+                          <span className="due-display">
+                            ({dueFormatter.format(new Date(t.dueAt))})
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {archived && t.assignedTo !== null && (
+                      <span>
+                        Ansvarig:{' '}
+                        {findPerson(people, t.assignedTo)?.name ?? '(borttagen)'}
                       </span>
                     )}
                   </div>
@@ -330,10 +423,10 @@ export default function App() {
         <footer className="footer">
           <span>{remaining} kvar</span>
           <button
-            onClick={() => setTodos((prev) => clearDone(prev))}
-            disabled={remaining === todos.length}
+            onClick={() => setTodos((prev) => archiveDone(prev))}
+            disabled={doneCount === 0}
           >
-            Rensa klara
+            Arkivera klara
           </button>
         </footer>
       </section>

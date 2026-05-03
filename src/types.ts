@@ -11,6 +11,7 @@ export type Todo = {
   createdBy: string;
   assignedTo: string | null;
   dueAt: number | null;
+  archivedAt: number | null;
 };
 
-export type Filter = 'all' | 'active' | 'done';
+export type Filter = 'all' | 'active' | 'done' | 'archive';

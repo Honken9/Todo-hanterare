@@ -18,11 +18,11 @@ React 18 + TypeScript + Vite. Tests with Vitest + Testing Library (jsdom). ESLin
 
 ## Architecture
 
-- `src/types.ts` — `Todo`, `Person`, and `Filter` types shared across modules. A `Todo` carries `createdBy` (immutable, the person id who added it), `assignedTo: string | null` (responsible person), and `dueAt: number | null` (epoch ms deadline).
-- `src/todos.ts` — pure functions for todo operations (`createTodo`, `toggle`, `remove`, `rename`, `setAssignee`, `setDueAt`, `clearAssignee`, `clearDone`, `applyFilter`). All return new arrays; no mutation. `clearAssignee` exists so the App can null-out assignments when a person is deleted.
+- `src/types.ts` — `Todo`, `Person`, and `Filter` types shared across modules. A `Todo` carries `createdBy` (immutable, the person id who added it), `assignedTo: string | null` (responsible person), `dueAt: number | null` (epoch ms deadline), and `archivedAt: number | null` (epoch ms when archived; null while live).
+- `src/todos.ts` — pure functions for todo operations (`createTodo`, `toggle`, `remove`, `rename`, `setAssignee`, `setDueAt`, `clearAssignee`, `archive`, `unarchive`, `archiveDone`, `cloneAsActive`, `applyFilter`). All return new arrays; no mutation. `clearAssignee` exists so the App can null-out assignments when a person is deleted. Done todos are archived (not deleted) so history is preserved; `cloneAsActive` reuses an archived todo's text + assignee in a fresh active one.
 - `src/people.ts` — pure functions for the person list (`createPerson`, `removePerson`, `findPerson`).
 - `src/storage.ts` — three independent `localStorage` slots:
-  - `todo-hanterare:todos:v2` — todo array; bump suffix when `Todo` shape changes (v1 was the pre-people shape and is intentionally not migrated).
+  - `todo-hanterare:todos:v2` — todo array; bump suffix when `Todo` shape changes (v1 was the pre-people shape and is intentionally not migrated). The loader normalizes optional fields like `archivedAt` (treats missing as `null`) so older v2 data without the field still loads.
   - `todo-hanterare:people:v1` — person array.
   - `todo-hanterare:me:v1` — id of the current user (the "Du är" picker). Persisted so the choice survives reloads.
   Each loader validates entries and silently drops malformed data — corrupt storage must never crash the app.

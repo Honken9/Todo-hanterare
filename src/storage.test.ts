@@ -23,6 +23,7 @@ describe('todo storage', () => {
         createdBy: 'p1',
         assignedTo: null,
         dueAt: null,
+        archivedAt: null,
       },
     ];
     saveTodos(todos);
@@ -50,11 +51,32 @@ describe('todo storage', () => {
           createdBy: 'p1',
           assignedTo: null,
           dueAt: null,
+          archivedAt: null,
         },
         { nope: true },
       ]),
     );
     expect(loadTodos()).toHaveLength(1);
+  });
+
+  it('treats missing archivedAt as null (back-compat)', () => {
+    localStorage.setItem(
+      'todo-hanterare:todos:v2',
+      JSON.stringify([
+        {
+          id: '1',
+          text: 'gammal',
+          done: true,
+          createdAt: 1,
+          createdBy: 'p1',
+          assignedTo: null,
+          dueAt: null,
+        },
+      ]),
+    );
+    const loaded = loadTodos();
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0].archivedAt).toBeNull();
   });
 });
 

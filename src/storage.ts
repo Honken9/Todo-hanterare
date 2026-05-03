@@ -10,7 +10,9 @@ export function loadTodos(): Todo[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isTodo);
+    return parsed
+      .map(normalizeTodo)
+      .filter((t): t is Todo => t !== null);
   } catch {
     return [];
   }
@@ -61,16 +63,28 @@ function isPerson(value: unknown): value is Person {
   return typeof p.id === 'string' && typeof p.name === 'string';
 }
 
-function isTodo(value: unknown): value is Todo {
-  if (typeof value !== 'object' || value === null) return false;
+function normalizeTodo(value: unknown): Todo | null {
+  if (typeof value !== 'object' || value === null) return null;
   const t = value as Record<string, unknown>;
-  return (
-    typeof t.id === 'string' &&
-    typeof t.text === 'string' &&
-    typeof t.done === 'boolean' &&
-    typeof t.createdAt === 'number' &&
-    typeof t.createdBy === 'string' &&
-    (t.assignedTo === null || typeof t.assignedTo === 'string') &&
-    (t.dueAt === null || typeof t.dueAt === 'number')
-  );
+  if (
+    typeof t.id !== 'string' ||
+    typeof t.text !== 'string' ||
+    typeof t.done !== 'boolean' ||
+    typeof t.createdAt !== 'number' ||
+    typeof t.createdBy !== 'string' ||
+    !(t.assignedTo === null || typeof t.assignedTo === 'string') ||
+    !(t.dueAt === null || typeof t.dueAt === 'number')
+  ) {
+    return null;
+  }
+  return {
+    id: t.id,
+    text: t.text,
+    done: t.done,
+    createdAt: t.createdAt,
+    createdBy: t.createdBy,
+    assignedTo: (t.assignedTo as string | null) ?? null,
+    dueAt: (t.dueAt as number | null) ?? null,
+    archivedAt: typeof t.archivedAt === 'number' ? t.archivedAt : null,
+  };
 }

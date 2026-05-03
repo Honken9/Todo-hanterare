@@ -208,6 +208,36 @@ button:disabled {
   font-weight: 600;
 }
 
+.list li.archived {
+  opacity: 0.85;
+}
+
+.list li.archived .row span {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.archived-at {
+  font-style: italic;
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.row-actions button {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+button.ghost {
+  background: transparent;
+  color: inherit;
+  border-color: #d4d4d8;
+}
+
 .row {
   display: flex;
   align-items: center;

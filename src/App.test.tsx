@@ -108,4 +108,63 @@ describe('<App />', () => {
     await user.click(screen.getByRole('button', { name: /Ta bort a/ }));
     expect(within(todosSection()).queryByText('a')).not.toBeInTheDocument();
   });
+
+  it('archives done todos and preserves them in arkiv', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await addPerson(user, 'Anna');
+    await addTodo(user, 'städa köket');
+    await addTodo(user, 'fortfarande att göra');
+
+    const doneCheckbox = within(todosSection()).getAllByRole('checkbox')[1];
+    await user.click(doneCheckbox);
+
+    await user.click(screen.getByRole('button', { name: 'Arkivera klara' }));
+
+    expect(
+      within(todosSection()).queryByText('städa köket'),
+    ).not.toBeInTheDocument();
+    expect(within(todosSection()).getByText('fortfarande att göra')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Arkiv' }));
+    expect(within(todosSection()).getByText('städa köket')).toBeInTheDocument();
+    expect(within(todosSection()).getByText(/Arkiverat:/)).toBeInTheDocument();
+  });
+
+  it('reuses an archived todo as a new active one', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await addPerson(user, 'Anna');
+    await addTodo(user, 'vattna blommor');
+
+    await user.click(within(todosSection()).getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Arkivera klara' }));
+    await user.click(screen.getByRole('tab', { name: 'Arkiv' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Använd igen vattna blommor' }),
+    );
+
+    expect(within(todosSection()).getByText('vattna blommor')).toBeInTheDocument();
+    expect(screen.getByText('1 kvar')).toBeInTheDocument();
+  });
+
+  it('restores an archived todo to active', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await addPerson(user, 'Anna');
+    await addTodo(user, 'damma');
+
+    await user.click(within(todosSection()).getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Arkivera klara' }));
+    await user.click(screen.getByRole('tab', { name: 'Arkiv' }));
+    await user.click(screen.getByRole('button', { name: 'Återställ damma' }));
+
+    expect(within(todosSection()).getByText('Arkivet är tomt.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('tab', { name: 'Aktiva' }));
+    expect(within(todosSection()).getByText('damma')).toBeInTheDocument();
+  });
 });
