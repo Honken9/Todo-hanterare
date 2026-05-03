@@ -1,34 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import type { Filter, Todo } from './types';
+import { supabase } from './lib/supabase';
 import {
-  loadMe,
-  loadPeople,
-  loadTodos,
-  saveMe,
-  savePeople,
-  saveTodos,
-} from './storage';
-import { createPerson, findPerson, removePerson } from './people';
-import {
-  applyFilter,
-  archiveDone,
-  cloneAsActive,
-  clearAssignee,
-  createTodo,
-  remove,
-  rename,
-  setAssignee,
-  setDueAt,
-  toggle,
-  unarchive,
-} from './todos';
+  deletePerson,
+  deleteTodo,
+  fetchPeople,
+  fetchTodos,
+  insertPerson,
+  insertTodo,
+  subscribeChanges,
+  updateTodo,
+} from './api';
+import { findPerson } from './people';
+import { applyFilter, cloneAsActive } from './todos';
+import { loadMe, saveMe } from './storage';
+import Auth from './Auth';
 
 const dueFormatter = new Intl.DateTimeFormat('sv-SE', {
-  dateStyle: 'short',
-  timeStyle: 'short',
-});
-
-const archiveFormatter = new Intl.DateTimeFormat('sv-SE', {
   dateStyle: 'short',
   timeStyle: 'short',
 });
@@ -56,9 +45,33 @@ const FILTER_LABELS: Record<Filter, string> = {
 };
 
 export default function App() {
-  const [todos, setTodos] = useState(() => loadTodos());
-  const [people, setPeople] = useState(() => loadPeople());
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthLoading(false);
+    });
+    const { data: subscription } = supabase.auth.onAuthStateChange(
+      (_event, newSession) => {
+        setSession(newSession);
+      },
+    );
+    return () => subscription.subscription.unsubscribe();
+  }, []);
+
+  if (authLoading) return <main className="app">Laddar…</main>;
+  if (!session) return <Auth />;
+  return <Workspace />;
+}
+
+function Workspace() {
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [people, setPeople] = useState(() => [] as { id: string; name: string }[]);
   const [me, setMe] = useState<string | null>(() => loadMe());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const [draft, setDraft] = useState('');
   const [draftDue, setDraftDue] = useState('');
@@ -69,15 +82,42 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
 
+  const reloadPeople = useCallback(async () => {
+    try {
+      setPeople(await fetchPeople());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  const reloadTodos = useCallback(async () => {
+    try {
+      setTodos(await fetchTodos());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
   useEffect(() => {
-    saveTodos(todos);
-  }, [todos]);
-  useEffect(() => {
-    savePeople(people);
-  }, [people]);
+    void Promise.all([reloadPeople(), reloadTodos()]).finally(() =>
+      setLoading(false),
+    );
+    const sub = subscribeChanges({
+      onPeopleChange: () => void reloadPeople(),
+      onTodosChange: () => void reloadTodos(),
+    });
+    return () => sub.unsubscribe();
+  }, [reloadPeople, reloadTodos]);
+
   useEffect(() => {
     saveMe(me);
   }, [me]);
+
+  useEffect(() => {
+    if (me !== null && !people.find((p) => p.id === me)) {
+      setMe(null);
+    }
+  }, [me, people]);
 
   const visible = useMemo(() => applyFilter(todos, filter), [todos, filter]);
   const remaining = useMemo(
@@ -89,44 +129,130 @@ export default function App() {
     [todos],
   );
 
-  function handleAddPerson(e: React.FormEvent) {
+  async function handleAddPerson(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = personDraft.trim();
     if (!trimmed) return;
-    const person = createPerson(trimmed);
-    setPeople((prev) => [...prev, person]);
-    if (me === null) setMe(person.id);
     setPersonDraft('');
+    try {
+      const person = await insertPerson(trimmed);
+      setPeople((prev) => [...prev, person]);
+      if (me === null) setMe(person.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
-  function handleRemovePerson(id: string) {
-    setPeople((prev) => removePerson(prev, id));
-    setTodos((prev) => clearAssignee(prev, id));
-    if (me === id) setMe(null);
+  async function handleRemovePerson(id: string) {
+    try {
+      await deletePerson(id);
+      setPeople((prev) => prev.filter((p) => p.id !== id));
+      if (me === id) setMe(null);
+      void reloadTodos();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
-  function handleAddTodo(e: React.FormEvent) {
+  async function handleAddTodo(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = draft.trim();
     if (!trimmed || me === null) return;
-    setTodos((prev) => [
-      createTodo({
+    setDraft('');
+    setDraftDue('');
+    setDraftAssignee('');
+    try {
+      const todo = await insertTodo({
         text: trimmed,
         createdBy: me,
         assignedTo: draftAssignee || null,
         dueAt: inputValueToDue(draftDue),
-      }),
-      ...prev,
-    ]);
-    setDraft('');
-    setDraftDue('');
-    setDraftAssignee('');
+      });
+      setTodos((prev) => [todo, ...prev]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
-  function handleReuse(source: Todo) {
+  async function patchTodo(
+    id: string,
+    patch: Parameters<typeof updateTodo>[1],
+    optimistic: (t: Todo) => Todo,
+  ) {
+    setTodos((prev) => prev.map((t) => (t.id === id ? optimistic(t) : t)));
+    try {
+      await updateTodo(id, patch);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      void reloadTodos();
+    }
+  }
+
+  async function handleToggle(t: Todo) {
+    void patchTodo(t.id, { done: !t.done }, (cur) => ({ ...cur, done: !cur.done }));
+  }
+
+  async function handleSetAssignee(id: string, assignedTo: string | null) {
+    void patchTodo(id, { assignedTo }, (cur) => ({ ...cur, assignedTo }));
+  }
+
+  async function handleSetDueAt(id: string, dueAt: number | null) {
+    void patchTodo(id, { dueAt }, (cur) => ({ ...cur, dueAt }));
+  }
+
+  async function handleUnarchive(t: Todo) {
+    void patchTodo(
+      t.id,
+      { archivedAt: null, done: false },
+      (cur) => ({ ...cur, archivedAt: null, done: false }),
+    );
+  }
+
+  async function handleArchiveDone() {
+    const at = Date.now();
+    const ids = todos
+      .filter((t) => t.done && t.archivedAt === null)
+      .map((t) => t.id);
+    setTodos((prev) =>
+      prev.map((t) =>
+        t.done && t.archivedAt === null ? { ...t, archivedAt: at } : t,
+      ),
+    );
+    try {
+      await Promise.all(
+        ids.map((id) => updateTodo(id, { archivedAt: at })),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      void reloadTodos();
+    }
+  }
+
+  async function handleRemoveTodo(id: string) {
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await deleteTodo(id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      void reloadTodos();
+    }
+  }
+
+  async function handleReuse(source: Todo) {
     if (me === null) return;
-    setTodos((prev) => [cloneAsActive(source, me), ...prev]);
     setFilter('all');
+    try {
+      const clone = cloneAsActive(source, me);
+      const todo = await insertTodo({
+        text: clone.text,
+        createdBy: clone.createdBy,
+        assignedTo: clone.assignedTo,
+        dueAt: clone.dueAt,
+      });
+      setTodos((prev) => [todo, ...prev]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }
 
   function startEdit(id: string, current: string) {
@@ -134,20 +260,46 @@ export default function App() {
     setEditingText(current);
   }
 
-  function commitEdit() {
+  async function commitEdit() {
     if (editingId === null) return;
-    setTodos((prev) => rename(prev, editingId, editingText));
+    const id = editingId;
+    const text = editingText.trim();
     setEditingId(null);
     setEditingText('');
+    if (!text) {
+      void handleRemoveTodo(id);
+      return;
+    }
+    void patchTodo(id, { text }, (cur) => ({ ...cur, text }));
   }
 
   const canAddTodo = me !== null && draft.trim().length > 0;
   const now = Date.now();
   const isArchiveView = filter === 'archive';
 
+  if (loading) return <main className="app">Laddar…</main>;
+
   return (
     <main className="app">
-      <h1>Todo-hanterare</h1>
+      <header className="top-bar">
+        <h1>Todo-hanterare</h1>
+        <button
+          className="ghost"
+          onClick={() => void supabase.auth.signOut()}
+          aria-label="Logga ut"
+        >
+          Logga ut
+        </button>
+      </header>
+
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}{' '}
+          <button className="ghost" onClick={() => setError(null)}>
+            Stäng
+          </button>
+        </p>
+      )}
 
       <section className="people">
         <h2>Personer</h2>
@@ -170,7 +322,7 @@ export default function App() {
                 <button
                   aria-label={`Ta bort ${p.name}`}
                   className="remove"
-                  onClick={() => handleRemovePerson(p.id)}
+                  onClick={() => void handleRemovePerson(p.id)}
                 >
                   ×
                 </button>
@@ -258,9 +410,7 @@ export default function App() {
 
         {visible.length === 0 ? (
           <p className="empty">
-            {isArchiveView
-              ? 'Arkivet är tomt.'
-              : 'Inga uppgifter att visa.'}
+            {isArchiveView ? 'Arkivet är tomt.' : 'Inga uppgifter att visa.'}
           </p>
         ) : (
           <ul className="list">
@@ -282,9 +432,7 @@ export default function App() {
                         type="checkbox"
                         checked={t.done}
                         disabled={archived}
-                        onChange={() =>
-                          setTodos((prev) => toggle(prev, t.id))
-                        }
+                        onChange={() => void handleToggle(t)}
                       />
                       {editingId === t.id ? (
                         <input
@@ -292,9 +440,9 @@ export default function App() {
                           autoFocus
                           value={editingText}
                           onChange={(e) => setEditingText(e.target.value)}
-                          onBlur={commitEdit}
+                          onBlur={() => void commitEdit()}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') commitEdit();
+                            if (e.key === 'Enter') void commitEdit();
                             if (e.key === 'Escape') {
                               setEditingId(null);
                               setEditingText('');
@@ -315,7 +463,7 @@ export default function App() {
                       <div className="row-actions">
                         <button
                           aria-label={`Använd igen ${t.text}`}
-                          onClick={() => handleReuse(t)}
+                          onClick={() => void handleReuse(t)}
                           disabled={me === null}
                         >
                           Använd igen
@@ -323,18 +471,14 @@ export default function App() {
                         <button
                           aria-label={`Återställ ${t.text}`}
                           className="ghost"
-                          onClick={() =>
-                            setTodos((prev) => unarchive(prev, t.id))
-                          }
+                          onClick={() => void handleUnarchive(t)}
                         >
                           Återställ
                         </button>
                         <button
                           aria-label={`Ta bort ${t.text}`}
                           className="remove"
-                          onClick={() =>
-                            setTodos((prev) => remove(prev, t.id))
-                          }
+                          onClick={() => void handleRemoveTodo(t.id)}
                         >
                           ×
                         </button>
@@ -343,7 +487,7 @@ export default function App() {
                       <button
                         aria-label={`Ta bort ${t.text}`}
                         className="remove"
-                        onClick={() => setTodos((prev) => remove(prev, t.id))}
+                        onClick={() => void handleRemoveTodo(t.id)}
                       >
                         ×
                       </button>
@@ -356,7 +500,7 @@ export default function App() {
                     {archived ? (
                       <span className="archived-at">
                         Arkiverat:{' '}
-                        {archiveFormatter.format(new Date(t.archivedAt!))}
+                        {dueFormatter.format(new Date(t.archivedAt!))}
                       </span>
                     ) : (
                       <>
@@ -366,12 +510,9 @@ export default function App() {
                             aria-label={`Ansvarig för ${t.text}`}
                             value={t.assignedTo ?? ''}
                             onChange={(e) =>
-                              setTodos((prev) =>
-                                setAssignee(
-                                  prev,
-                                  t.id,
-                                  e.target.value || null,
-                                ),
+                              void handleSetAssignee(
+                                t.id,
+                                e.target.value || null,
                               )
                             }
                           >
@@ -390,12 +531,9 @@ export default function App() {
                             type="datetime-local"
                             value={dueToInputValue(t.dueAt)}
                             onChange={(e) =>
-                              setTodos((prev) =>
-                                setDueAt(
-                                  prev,
-                                  t.id,
-                                  inputValueToDue(e.target.value),
-                                ),
+                              void handleSetDueAt(
+                                t.id,
+                                inputValueToDue(e.target.value),
                               )
                             }
                           />
@@ -410,7 +548,8 @@ export default function App() {
                     {archived && t.assignedTo !== null && (
                       <span>
                         Ansvarig:{' '}
-                        {findPerson(people, t.assignedTo)?.name ?? '(borttagen)'}
+                        {findPerson(people, t.assignedTo)?.name ??
+                          '(borttagen)'}
                       </span>
                     )}
                   </div>
@@ -422,10 +561,7 @@ export default function App() {
 
         <footer className="footer">
           <span>{remaining} kvar</span>
-          <button
-            onClick={() => setTodos((prev) => archiveDone(prev))}
-            disabled={doneCount === 0}
-          >
+          <button onClick={() => void handleArchiveDone()} disabled={doneCount === 0}>
             Arkivera klara
           </button>
         </footer>

@@ -38,6 +38,53 @@ h1 {
   font-size: 1.5rem;
 }
 
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.top-bar h1 {
+  margin: 0;
+}
+
+.auth p {
+  font-size: 0.95rem;
+  color: #71717a;
+}
+
+.auth-success {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-top: 0.75rem;
+}
+
+.auth-error {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  margin-top: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .auth-success {
+    background: #064e3b;
+    color: #a7f3d0;
+  }
+  .auth-error {
+    background: #7f1d1d;
+    color: #fecaca;
+  }
+}
+
 h2 {
   font-size: 1rem;
   text-transform: uppercase;

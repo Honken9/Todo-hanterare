@@ -1,103 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  loadMe,
-  loadPeople,
-  loadTodos,
-  saveMe,
-  savePeople,
-  saveTodos,
-} from './storage';
+import { loadMe, saveMe } from './storage';
 
 beforeEach(() => {
   localStorage.clear();
-});
-
-describe('todo storage', () => {
-  it('round-trips todos', () => {
-    const todos = [
-      {
-        id: '1',
-        text: 'a',
-        done: false,
-        createdAt: 1,
-        createdBy: 'p1',
-        assignedTo: null,
-        dueAt: null,
-        archivedAt: null,
-      },
-    ];
-    saveTodos(todos);
-    expect(loadTodos()).toEqual(todos);
-  });
-
-  it('returns empty array when nothing stored', () => {
-    expect(loadTodos()).toEqual([]);
-  });
-
-  it('returns empty array when stored value is invalid JSON', () => {
-    localStorage.setItem('todo-hanterare:todos:v2', 'not json');
-    expect(loadTodos()).toEqual([]);
-  });
-
-  it('filters out malformed entries', () => {
-    localStorage.setItem(
-      'todo-hanterare:todos:v2',
-      JSON.stringify([
-        {
-          id: '1',
-          text: 'ok',
-          done: false,
-          createdAt: 1,
-          createdBy: 'p1',
-          assignedTo: null,
-          dueAt: null,
-          archivedAt: null,
-        },
-        { nope: true },
-      ]),
-    );
-    expect(loadTodos()).toHaveLength(1);
-  });
-
-  it('treats missing archivedAt as null (back-compat)', () => {
-    localStorage.setItem(
-      'todo-hanterare:todos:v2',
-      JSON.stringify([
-        {
-          id: '1',
-          text: 'gammal',
-          done: true,
-          createdAt: 1,
-          createdBy: 'p1',
-          assignedTo: null,
-          dueAt: null,
-        },
-      ]),
-    );
-    const loaded = loadTodos();
-    expect(loaded).toHaveLength(1);
-    expect(loaded[0].archivedAt).toBeNull();
-  });
-});
-
-describe('people storage', () => {
-  it('round-trips people', () => {
-    const people = [{ id: '1', name: 'Anna' }];
-    savePeople(people);
-    expect(loadPeople()).toEqual(people);
-  });
-
-  it('returns empty array when nothing stored', () => {
-    expect(loadPeople()).toEqual([]);
-  });
-
-  it('filters out malformed entries', () => {
-    localStorage.setItem(
-      'todo-hanterare:people:v1',
-      JSON.stringify([{ id: '1', name: 'Anna' }, { nope: true }]),
-    );
-    expect(loadPeople()).toHaveLength(1);
-  });
 });
 
 describe('me storage', () => {
@@ -113,6 +18,11 @@ describe('me storage', () => {
   });
 
   it('returns null when nothing stored', () => {
+    expect(loadMe()).toBeNull();
+  });
+
+  it('returns null on malformed JSON', () => {
+    localStorage.setItem('todo-hanterare:me:v1', 'not json');
     expect(loadMe()).toBeNull();
   });
 });
