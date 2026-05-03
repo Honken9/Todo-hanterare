@@ -19,12 +19,15 @@ vi.mock('./lib/supabase', () => {
       from: vi.fn(() => ({
         select: vi.fn().mockReturnValue({
           order: vi.fn().mockResolvedValue({ data: [], error: null }),
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+          }),
         }),
       })),
       channel: vi.fn(() => channel),
       removeChannel: vi.fn(),
     },
-    PersonRow: {},
+    ProfileRow: {},
     TodoRow: {},
   };
 });

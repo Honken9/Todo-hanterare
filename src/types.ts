@@ -1,6 +1,7 @@
-export type Person = {
+export type Profile = {
   id: string;
-  name: string;
+  displayName: string;
+  isAdmin: boolean;
 };
 
 export type Todo = {
@@ -8,7 +9,7 @@ export type Todo = {
   text: string;
   done: boolean;
   createdAt: number;
-  createdBy: string;
+  createdBy: string | null;
   assignedTo: string | null;
   dueAt: number | null;
   archivedAt: number | null;

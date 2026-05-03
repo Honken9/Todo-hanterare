@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
-import type { Filter, Todo } from './types';
+import type { Filter, Profile, Todo } from './types';
 import { supabase } from './lib/supabase';
 import {
-  deletePerson,
+  deleteProfile,
   deleteTodo,
-  fetchPeople,
+  fetchMyProfile,
+  fetchProfiles,
   fetchTodos,
-  insertPerson,
   insertTodo,
   subscribeChanges,
+  updateProfile,
   updateTodo,
 } from './api';
-import { findPerson } from './people';
+import { findProfile, profileLabel } from './profiles';
 import { applyFilter, cloneAsActive } from './todos';
-import { loadMe, saveMe } from './storage';
 import Auth from './Auth';
 
 const dueFormatter = new Intl.DateTimeFormat('sv-SE', {
@@ -63,13 +63,14 @@ export default function App() {
 
   if (authLoading) return <main className="app">Laddar…</main>;
   if (!session) return <Auth />;
-  return <Workspace />;
+  return <Workspace session={session} />;
 }
 
-function Workspace() {
+function Workspace({ session }: { session: Session }) {
+  const userId = session.user.id;
+  const [me, setMe] = useState<Profile | null>(null);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [people, setPeople] = useState(() => [] as { id: string; name: string }[]);
-  const [me, setMe] = useState<string | null>(() => loadMe());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,17 +79,19 @@ function Workspace() {
   const [draftAssignee, setDraftAssignee] = useState('');
 
   const [filter, setFilter] = useState<Filter>('all');
-  const [personDraft, setPersonDraft] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
 
-  const reloadPeople = useCallback(async () => {
+  const reloadProfiles = useCallback(async () => {
     try {
-      setPeople(await fetchPeople());
+      setProfiles(await fetchProfiles());
+      setMe(await fetchMyProfile(userId));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, []);
+  }, [userId]);
 
   const reloadTodos = useCallback(async () => {
     try {
@@ -99,25 +102,19 @@ function Workspace() {
   }, []);
 
   useEffect(() => {
-    void Promise.all([reloadPeople(), reloadTodos()]).finally(() =>
+    void Promise.all([reloadProfiles(), reloadTodos()]).finally(() =>
       setLoading(false),
     );
     const sub = subscribeChanges({
-      onPeopleChange: () => void reloadPeople(),
+      onProfilesChange: () => void reloadProfiles(),
       onTodosChange: () => void reloadTodos(),
     });
     return () => sub.unsubscribe();
-  }, [reloadPeople, reloadTodos]);
+  }, [reloadProfiles, reloadTodos]);
 
   useEffect(() => {
-    saveMe(me);
+    if (me) setNameDraft(me.displayName);
   }, [me]);
-
-  useEffect(() => {
-    if (me !== null && !people.find((p) => p.id === me)) {
-      setMe(null);
-    }
-  }, [me, people]);
 
   const visible = useMemo(() => applyFilter(todos, filter), [todos, filter]);
   const remaining = useMemo(
@@ -129,42 +126,17 @@ function Workspace() {
     [todos],
   );
 
-  async function handleAddPerson(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = personDraft.trim();
-    if (!trimmed) return;
-    setPersonDraft('');
-    try {
-      const person = await insertPerson(trimmed);
-      setPeople((prev) => [...prev, person]);
-      if (me === null) setMe(person.id);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function handleRemovePerson(id: string) {
-    try {
-      await deletePerson(id);
-      setPeople((prev) => prev.filter((p) => p.id !== id));
-      if (me === id) setMe(null);
-      void reloadTodos();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
   async function handleAddTodo(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = draft.trim();
-    if (!trimmed || me === null) return;
+    if (!trimmed || !me) return;
     setDraft('');
     setDraftDue('');
     setDraftAssignee('');
     try {
       const todo = await insertTodo({
         text: trimmed,
-        createdBy: me,
+        createdBy: me.id,
         assignedTo: draftAssignee || null,
         dueAt: inputValueToDue(draftDue),
       });
@@ -200,6 +172,14 @@ function Workspace() {
     void patchTodo(id, { dueAt }, (cur) => ({ ...cur, dueAt }));
   }
 
+  async function handleTake(t: Todo) {
+    if (!me) return;
+    void patchTodo(t.id, { assignedTo: me.id }, (cur) => ({
+      ...cur,
+      assignedTo: me.id,
+    }));
+  }
+
   async function handleUnarchive(t: Todo) {
     void patchTodo(
       t.id,
@@ -219,9 +199,7 @@ function Workspace() {
       ),
     );
     try {
-      await Promise.all(
-        ids.map((id) => updateTodo(id, { archivedAt: at })),
-      );
+      await Promise.all(ids.map((id) => updateTodo(id, { archivedAt: at })));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       void reloadTodos();
@@ -239,13 +217,13 @@ function Workspace() {
   }
 
   async function handleReuse(source: Todo) {
-    if (me === null) return;
+    if (!me) return;
     setFilter('all');
     try {
-      const clone = cloneAsActive(source, me);
+      const clone = cloneAsActive(source, me.id);
       const todo = await insertTodo({
         text: clone.text,
-        createdBy: clone.createdBy,
+        createdBy: me.id,
         assignedTo: clone.assignedTo,
         dueAt: clone.dueAt,
       });
@@ -273,23 +251,68 @@ function Workspace() {
     void patchTodo(id, { text }, (cur) => ({ ...cur, text }));
   }
 
-  const canAddTodo = me !== null && draft.trim().length > 0;
+  async function handleSaveDisplayName() {
+    if (!me) return;
+    const trimmed = nameDraft.trim();
+    if (!trimmed || trimmed === me.displayName) return;
+    try {
+      await updateProfile(me.id, { displayName: trimmed });
+      void reloadProfiles();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function handleToggleAdmin(profile: Profile) {
+    try {
+      await updateProfile(profile.id, { isAdmin: !profile.isAdmin });
+      void reloadProfiles();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  async function handleDeleteProfile(profile: Profile) {
+    if (!confirm(`Ta bort ${profileLabel(profile)}? Detta går inte att ångra.`)) {
+      return;
+    }
+    try {
+      await deleteProfile(profile.id);
+      void reloadProfiles();
+      void reloadTodos();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  const canAddTodo = !!me && draft.trim().length > 0;
   const now = Date.now();
   const isArchiveView = filter === 'archive';
 
-  if (loading) return <main className="app">Laddar…</main>;
+  if (loading || !me) return <main className="app">Laddar…</main>;
 
   return (
     <main className="app">
       <header className="top-bar">
         <h1>Todo-hanterare</h1>
-        <button
-          className="ghost"
-          onClick={() => void supabase.auth.signOut()}
-          aria-label="Logga ut"
-        >
-          Logga ut
-        </button>
+        <div className="top-bar-actions">
+          <span className="who">
+            {profileLabel(me)}
+            {me.isAdmin && <span className="badge">admin</span>}
+          </span>
+          {me.isAdmin && (
+            <button
+              className="ghost"
+              onClick={() => setShowAdmin((v) => !v)}
+              aria-pressed={showAdmin}
+            >
+              {showAdmin ? 'Stäng admin' : 'Admin'}
+            </button>
+          )}
+          <button className="ghost" onClick={() => void supabase.auth.signOut()}>
+            Logga ut
+          </button>
+        </div>
       </header>
 
       {error && (
@@ -301,53 +324,73 @@ function Workspace() {
         </p>
       )}
 
-      <section className="people">
-        <h2>Personer</h2>
-        <form className="composer" onSubmit={handleAddPerson}>
+      <section className="profile-edit">
+        <h2>Ditt namn</h2>
+        <form
+          className="composer"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleSaveDisplayName();
+          }}
+        >
           <input
-            aria-label="Nytt namn"
-            placeholder="Lägg till person"
-            value={personDraft}
-            onChange={(e) => setPersonDraft(e.target.value)}
+            aria-label="Visningsnamn"
+            placeholder="Hur du visas i listan"
+            value={nameDraft}
+            onChange={(e) => setNameDraft(e.target.value)}
           />
-          <button type="submit" disabled={!personDraft.trim()}>
-            Lägg till
+          <button
+            type="submit"
+            disabled={
+              !nameDraft.trim() || nameDraft.trim() === me.displayName
+            }
+          >
+            Spara
           </button>
         </form>
-        {people.length > 0 && (
-          <ul className="person-list">
-            {people.map((p) => (
-              <li key={p.id}>
-                <span>{p.name}</span>
-                <button
-                  aria-label={`Ta bort ${p.name}`}
-                  className="remove"
-                  onClick={() => void handleRemovePerson(p.id)}
-                >
-                  ×
-                </button>
+      </section>
+
+      {showAdmin && me.isAdmin && (
+        <section className="admin">
+          <h2>Användare (admin)</h2>
+          <p className="hint">
+            Bjud in nya användare via Supabase: <em>Authentication → Users → Invite user</em>.
+          </p>
+          <ul className="profile-list">
+            {profiles.map((p) => (
+              <li key={p.id} className={p.id === me.id ? 'me' : ''}>
+                <span className="name">
+                  {profileLabel(p)}
+                  {p.isAdmin && <span className="badge">admin</span>}
+                  {p.id === me.id && <span className="hint">(du)</span>}
+                </span>
+                <div className="row-actions">
+                  <button
+                    className="ghost"
+                    onClick={() => void handleToggleAdmin(p)}
+                    disabled={p.id === me.id}
+                    aria-label={
+                      p.isAdmin
+                        ? `Ta bort admin från ${profileLabel(p)}`
+                        : `Gör ${profileLabel(p)} till admin`
+                    }
+                  >
+                    {p.isAdmin ? 'Avmarkera admin' : 'Gör till admin'}
+                  </button>
+                  <button
+                    className="remove"
+                    onClick={() => void handleDeleteProfile(p)}
+                    disabled={p.id === me.id}
+                    aria-label={`Ta bort ${profileLabel(p)}`}
+                  >
+                    Ta bort
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
-        )}
-
-        <label className="me-picker">
-          Du är:{' '}
-          <select
-            aria-label="Du är"
-            value={me ?? ''}
-            onChange={(e) => setMe(e.target.value || null)}
-            disabled={people.length === 0}
-          >
-            <option value="">— välj —</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </section>
+        </section>
+      )}
 
       <section className="todos">
         <h2>Uppgifter</h2>
@@ -356,12 +399,9 @@ function Workspace() {
             <label className="col">
               <span className="col-header">Uppgift</span>
               <input
-                placeholder={
-                  me === null ? 'Välj vem du är först' : 'Vad behöver göras?'
-                }
+                placeholder="Vad behöver göras?"
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                disabled={me === null}
               />
             </label>
             <label className="col">
@@ -370,7 +410,6 @@ function Workspace() {
                 type="datetime-local"
                 value={draftDue}
                 onChange={(e) => setDraftDue(e.target.value)}
-                disabled={me === null}
               />
             </label>
             <label className="col">
@@ -378,12 +417,11 @@ function Workspace() {
               <select
                 value={draftAssignee}
                 onChange={(e) => setDraftAssignee(e.target.value)}
-                disabled={me === null || people.length === 0}
               >
-                <option value="">Ingen ansvarig</option>
-                {people.map((p) => (
+                <option value="">Till alla</option>
+                {profiles.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}
+                    {profileLabel(p)}
                   </option>
                 ))}
               </select>
@@ -415,14 +453,21 @@ function Workspace() {
         ) : (
           <ul className="list">
             {visible.map((t) => {
-              const creator = findPerson(people, t.createdBy);
+              const creator = findProfile(profiles, t.createdBy);
+              const assignee = findProfile(profiles, t.assignedTo);
               const archived = t.archivedAt !== null;
               const overdue =
                 !archived && t.dueAt !== null && !t.done && t.dueAt < now;
+              const isOpen = !archived && t.assignedTo === null;
+              const canEdit =
+                !archived &&
+                (me.isAdmin ||
+                  t.createdBy === me.id ||
+                  t.assignedTo === me.id);
               return (
                 <li
                   key={t.id}
-                  className={`${t.done ? 'done' : ''} ${overdue ? 'overdue' : ''} ${archived ? 'archived' : ''}`
+                  className={`${t.done ? 'done' : ''} ${overdue ? 'overdue' : ''} ${archived ? 'archived' : ''} ${isOpen ? 'open' : ''}`
                     .trim()
                     .replace(/\s+/g, ' ')}
                 >
@@ -431,7 +476,7 @@ function Workspace() {
                       <input
                         type="checkbox"
                         checked={t.done}
-                        disabled={archived}
+                        disabled={archived || !canEdit}
                         onChange={() => void handleToggle(t)}
                       />
                       {editingId === t.id ? (
@@ -451,57 +496,75 @@ function Workspace() {
                         />
                       ) : (
                         <span
-                          onDoubleClick={() =>
-                            !archived && startEdit(t.id, t.text)
-                          }
+                          onDoubleClick={() => canEdit && startEdit(t.id, t.text)}
                         >
                           {t.text}
                         </span>
                       )}
                     </label>
-                    {archived ? (
-                      <div className="row-actions">
-                        <button
-                          aria-label={`Använd igen ${t.text}`}
-                          onClick={() => void handleReuse(t)}
-                          disabled={me === null}
-                        >
-                          Använd igen
-                        </button>
-                        <button
-                          aria-label={`Återställ ${t.text}`}
-                          className="ghost"
-                          onClick={() => void handleUnarchive(t)}
-                        >
-                          Återställ
-                        </button>
-                        <button
-                          aria-label={`Ta bort ${t.text}`}
-                          className="remove"
-                          onClick={() => void handleRemoveTodo(t.id)}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        aria-label={`Ta bort ${t.text}`}
-                        className="remove"
-                        onClick={() => void handleRemoveTodo(t.id)}
-                      >
-                        ×
-                      </button>
-                    )}
+                    <div className="row-actions">
+                      {archived ? (
+                        <>
+                          <button
+                            aria-label={`Använd igen ${t.text}`}
+                            onClick={() => void handleReuse(t)}
+                          >
+                            Använd igen
+                          </button>
+                          <button
+                            aria-label={`Återställ ${t.text}`}
+                            className="ghost"
+                            onClick={() => void handleUnarchive(t)}
+                          >
+                            Återställ
+                          </button>
+                          {(me.isAdmin || t.createdBy === me.id) && (
+                            <button
+                              aria-label={`Ta bort ${t.text}`}
+                              className="remove"
+                              onClick={() => void handleRemoveTodo(t.id)}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {isOpen && t.createdBy !== me.id && (
+                            <button
+                              aria-label={`Ta ${t.text}`}
+                              onClick={() => void handleTake(t)}
+                            >
+                              Ta
+                            </button>
+                          )}
+                          {(me.isAdmin || t.createdBy === me.id) && (
+                            <button
+                              aria-label={`Ta bort ${t.text}`}
+                              className="remove"
+                              onClick={() => void handleRemoveTodo(t.id)}
+                            >
+                              ×
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="meta">
                     <span className="creator">
-                      Av: {creator ? creator.name : '(borttagen)'}
+                      Av: {profileLabel(creator)}
                     </span>
                     {archived ? (
-                      <span className="archived-at">
-                        Arkiverat:{' '}
-                        {dueFormatter.format(new Date(t.archivedAt!))}
-                      </span>
+                      <>
+                        <span className="archived-at">
+                          Arkiverat:{' '}
+                          {dueFormatter.format(new Date(t.archivedAt!))}
+                        </span>
+                        {assignee && (
+                          <span>Ansvarig: {profileLabel(assignee)}</span>
+                        )}
+                      </>
                     ) : (
                       <>
                         <label>
@@ -515,11 +578,12 @@ function Workspace() {
                                 e.target.value || null,
                               )
                             }
+                            disabled={!canEdit && !isOpen}
                           >
-                            <option value="">— ingen —</option>
-                            {people.map((p) => (
+                            <option value="">Till alla</option>
+                            {profiles.map((p) => (
                               <option key={p.id} value={p.id}>
-                                {p.name}
+                                {profileLabel(p)}
                               </option>
                             ))}
                           </select>
@@ -536,6 +600,7 @@ function Workspace() {
                                 inputValueToDue(e.target.value),
                               )
                             }
+                            disabled={!canEdit}
                           />
                         </label>
                         {t.dueAt !== null && (
@@ -544,13 +609,6 @@ function Workspace() {
                           </span>
                         )}
                       </>
-                    )}
-                    {archived && t.assignedTo !== null && (
-                      <span>
-                        Ansvarig:{' '}
-                        {findPerson(people, t.assignedTo)?.name ??
-                          '(borttagen)'}
-                      </span>
                     )}
                   </div>
                 </li>
@@ -561,7 +619,10 @@ function Workspace() {
 
         <footer className="footer">
           <span>{remaining} kvar</span>
-          <button onClick={() => void handleArchiveDone()} disabled={doneCount === 0}>
+          <button
+            onClick={() => void handleArchiveDone()}
+            disabled={doneCount === 0}
+          >
             Arkivera klara
           </button>
         </footer>

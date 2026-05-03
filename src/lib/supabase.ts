@@ -16,9 +16,10 @@ export const supabase = createClient(url, anonKey, {
   },
 });
 
-export type PersonRow = {
+export type ProfileRow = {
   id: string;
-  name: string;
+  display_name: string;
+  is_admin: boolean;
   created_at: string;
 };
 
