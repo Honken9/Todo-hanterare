@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 
@@ -7,41 +7,105 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+function peopleSection() {
+  return screen.getByRole('heading', { name: 'Personer' })
+    .parentElement as HTMLElement;
+}
+
+function todosSection() {
+  return screen.getByRole('heading', { name: 'Uppgifter' })
+    .parentElement as HTMLElement;
+}
+
+async function addPerson(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+) {
+  await user.type(screen.getByLabelText('Nytt namn'), name);
+  await user.click(
+    within(peopleSection()).getByRole('button', { name: 'Lägg till' }),
+  );
+}
+
+async function addTodo(
+  user: ReturnType<typeof userEvent.setup>,
+  text: string,
+) {
+  await user.type(screen.getByLabelText('Ny uppgift'), text);
+  await user.click(
+    within(todosSection()).getByRole('button', { name: 'Lägg till' }),
+  );
+}
+
 describe('<App />', () => {
-  it('adds, toggles and removes a todo', async () => {
-    const user = userEvent.setup();
+  it('blocks adding todos until a person is selected as me', () => {
     render(<App />);
-
-    await user.type(screen.getByLabelText('Ny uppgift'), 'köp mjölk');
-    await user.click(screen.getByRole('button', { name: 'Lägg till' }));
-
-    expect(screen.getByText('köp mjölk')).toBeInTheDocument();
-    expect(screen.getByText('1 kvar')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('checkbox'));
-    expect(screen.getByText('0 kvar')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /Ta bort köp mjölk/ }));
-    expect(screen.queryByText('köp mjölk')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Ny uppgift')).toBeDisabled();
   });
 
-  it('filters todos', async () => {
+  it('adds a person, becomes them, and creates a todo with creator', async () => {
     const user = userEvent.setup();
     render(<App />);
 
-    const input = screen.getByLabelText('Ny uppgift');
-    await user.type(input, 'a');
-    await user.click(screen.getByRole('button', { name: 'Lägg till' }));
-    await user.type(input, 'b');
-    await user.click(screen.getByRole('button', { name: 'Lägg till' }));
+    await addPerson(user, 'Anna');
+    expect(
+      within(peopleSection()).getByRole('button', { name: 'Ta bort Anna' }),
+    ).toBeInTheDocument();
 
-    const checkboxes = screen.getAllByRole('checkbox');
+    await addTodo(user, 'köp mjölk');
+
+    const todoItem = within(todosSection()).getByRole('listitem');
+    expect(within(todoItem).getByText('köp mjölk')).toBeInTheDocument();
+    expect(within(todoItem).getByText(/Av:\s*Anna/)).toBeInTheDocument();
+  });
+
+  it('removing a person clears their assignments', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await addPerson(user, 'Anna');
+    await addPerson(user, 'Björn');
+
+    await user.type(screen.getByLabelText('Ny uppgift'), 'fixa lampan');
+    await user.selectOptions(screen.getByLabelText('Ansvarig'), 'Björn');
+    await user.click(
+      within(todosSection()).getByRole('button', { name: 'Lägg till' }),
+    );
+
+    const assigneeSelect = screen.getByLabelText(
+      'Ansvarig för fixa lampan',
+    ) as HTMLSelectElement;
+    expect(assigneeSelect.selectedOptions[0].textContent).toBe('Björn');
+
+    await user.click(screen.getByRole('button', { name: 'Ta bort Björn' }));
+
+    expect(
+      (screen.getByLabelText('Ansvarig för fixa lampan') as HTMLSelectElement)
+        .value,
+    ).toBe('');
+  });
+
+  it('toggles, filters, and removes a todo', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await addPerson(user, 'Anna');
+    await addTodo(user, 'a');
+    await addTodo(user, 'b');
+
+    const checkboxes = within(todosSection()).getAllByRole('checkbox');
     await user.click(checkboxes[0]);
 
+    expect(screen.getByText('1 kvar')).toBeInTheDocument();
+
     await user.click(screen.getByRole('tab', { name: 'Klara' }));
-    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(within(todosSection()).getAllByRole('listitem')).toHaveLength(1);
 
     await user.click(screen.getByRole('tab', { name: 'Aktiva' }));
-    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(within(todosSection()).getAllByRole('listitem')).toHaveLength(1);
+
+    await user.click(screen.getByRole('tab', { name: 'Alla' }));
+    await user.click(screen.getByRole('button', { name: /Ta bort a/ }));
+    expect(within(todosSection()).queryByText('a')).not.toBeInTheDocument();
   });
 });

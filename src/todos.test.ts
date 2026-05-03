@@ -1,28 +1,69 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyFilter,
+  clearAssignee,
   clearDone,
   createTodo,
   remove,
   rename,
+  setAssignee,
+  setDueAt,
   toggle,
 } from './todos';
 import type { Todo } from './types';
 
 function fixture(): Todo[] {
   return [
-    { id: '1', text: 'a', done: false, createdAt: 1 },
-    { id: '2', text: 'b', done: true, createdAt: 2 },
-    { id: '3', text: 'c', done: false, createdAt: 3 },
+    {
+      id: '1',
+      text: 'a',
+      done: false,
+      createdAt: 1,
+      createdBy: 'p1',
+      assignedTo: 'p1',
+      dueAt: null,
+    },
+    {
+      id: '2',
+      text: 'b',
+      done: true,
+      createdAt: 2,
+      createdBy: 'p1',
+      assignedTo: 'p2',
+      dueAt: 1000,
+    },
+    {
+      id: '3',
+      text: 'c',
+      done: false,
+      createdAt: 3,
+      createdBy: 'p2',
+      assignedTo: null,
+      dueAt: null,
+    },
   ];
 }
 
 describe('createTodo', () => {
   it('trims text and starts not done', () => {
-    const t = createTodo('  hej  ');
+    const t = createTodo({ text: '  hej  ', createdBy: 'p1' });
     expect(t.text).toBe('hej');
     expect(t.done).toBe(false);
     expect(t.id).toBeTruthy();
+    expect(t.createdBy).toBe('p1');
+    expect(t.assignedTo).toBeNull();
+    expect(t.dueAt).toBeNull();
+  });
+
+  it('accepts assignee and due date', () => {
+    const t = createTodo({
+      text: 'x',
+      createdBy: 'p1',
+      assignedTo: 'p2',
+      dueAt: 12345,
+    });
+    expect(t.assignedTo).toBe('p2');
+    expect(t.dueAt).toBe(12345);
   });
 });
 
@@ -51,6 +92,39 @@ describe('rename', () => {
   it('removes when text becomes empty', () => {
     const result = rename(fixture(), '1', '   ');
     expect(result.find((t) => t.id === '1')).toBeUndefined();
+  });
+});
+
+describe('setAssignee', () => {
+  it('updates assignee', () => {
+    const result = setAssignee(fixture(), '1', 'p2');
+    expect(result[0].assignedTo).toBe('p2');
+  });
+
+  it('clears assignee with null', () => {
+    const result = setAssignee(fixture(), '2', null);
+    expect(result[1].assignedTo).toBeNull();
+  });
+});
+
+describe('setDueAt', () => {
+  it('updates due date', () => {
+    const result = setDueAt(fixture(), '1', 5000);
+    expect(result[0].dueAt).toBe(5000);
+  });
+
+  it('clears due date with null', () => {
+    const result = setDueAt(fixture(), '2', null);
+    expect(result[1].dueAt).toBeNull();
+  });
+});
+
+describe('clearAssignee', () => {
+  it('nulls assignee for everyone matching the person', () => {
+    const result = clearAssignee(fixture(), 'p1');
+    expect(result[0].assignedTo).toBeNull();
+    expect(result[1].assignedTo).toBe('p2');
+    expect(result[2].assignedTo).toBeNull();
   });
 });
 

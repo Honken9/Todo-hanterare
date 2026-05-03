@@ -18,11 +18,18 @@ React 18 + TypeScript + Vite. Tests with Vitest + Testing Library (jsdom). ESLin
 
 ## Architecture
 
-- `src/types.ts` — `Todo` and `Filter` types shared across modules.
-- `src/todos.ts` — pure functions for todo operations (`createTodo`, `toggle`, `remove`, `rename`, `clearDone`, `applyFilter`). All return new arrays; no mutation. This is where business logic lives and where unit tests target.
-- `src/storage.ts` — `loadTodos` / `saveTodos` wrap `localStorage` under the key `todo-hanterare:todos:v1`. `loadTodos` validates each entry and silently drops malformed data (corrupt storage should never crash the app). Bump the key suffix when the `Todo` shape changes.
-- `src/App.tsx` — single component. Holds state via `useState`, persists on every change via a `useEffect` that calls `saveTodos`. Calls into `src/todos.ts` for every mutation, so the component stays thin.
+- `src/types.ts` — `Todo`, `Person`, and `Filter` types shared across modules. A `Todo` carries `createdBy` (immutable, the person id who added it), `assignedTo: string | null` (responsible person), and `dueAt: number | null` (epoch ms deadline).
+- `src/todos.ts` — pure functions for todo operations (`createTodo`, `toggle`, `remove`, `rename`, `setAssignee`, `setDueAt`, `clearAssignee`, `clearDone`, `applyFilter`). All return new arrays; no mutation. `clearAssignee` exists so the App can null-out assignments when a person is deleted.
+- `src/people.ts` — pure functions for the person list (`createPerson`, `removePerson`, `findPerson`).
+- `src/storage.ts` — three independent `localStorage` slots:
+  - `todo-hanterare:todos:v2` — todo array; bump suffix when `Todo` shape changes (v1 was the pre-people shape and is intentionally not migrated).
+  - `todo-hanterare:people:v1` — person array.
+  - `todo-hanterare:me:v1` — id of the current user (the "Du är" picker). Persisted so the choice survives reloads.
+  Each loader validates entries and silently drops malformed data — corrupt storage must never crash the app.
+- `src/App.tsx` — single component. Holds `todos`, `people`, and `me` in `useState`, persists each via its own `useEffect`. All mutations route through the pure functions in `todos.ts` / `people.ts`. Adding a todo is gated on `me !== null`. Removing a person also calls `clearAssignee` and clears `me` if it pointed at them.
 - `src/main.tsx` — React entry, mounts `<App />` into `#root`.
+
+`<input type="datetime-local">` is the source of truth for deadlines in the UI. App.tsx has small `dueToInputValue` / `inputValueToDue` helpers that convert between the input's local-time string and epoch ms.
 
 Two config files exist on purpose: `vite.config.ts` is used by the dev server and `tsc -b`, while `vitest.config.ts` is used only by Vitest. Keeping them split avoids a known type conflict between Vite's types and the nested copy of Vite that ships inside Vitest. Don't merge them back into one file unless the underlying versions are aligned.
 
