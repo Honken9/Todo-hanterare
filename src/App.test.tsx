@@ -31,7 +31,7 @@ async function addTodo(
   user: ReturnType<typeof userEvent.setup>,
   text: string,
 ) {
-  await user.type(screen.getByLabelText('Ny uppgift'), text);
+  await user.type(screen.getByLabelText('Uppgift'), text);
   await user.click(
     within(todosSection()).getByRole('button', { name: 'Lägg till' }),
   );
@@ -40,7 +40,7 @@ async function addTodo(
 describe('<App />', () => {
   it('blocks adding todos until a person is selected as me', () => {
     render(<App />);
-    expect(screen.getByLabelText('Ny uppgift')).toBeDisabled();
+    expect(screen.getByLabelText('Uppgift')).toBeDisabled();
   });
 
   it('adds a person, becomes them, and creates a todo with creator', async () => {
@@ -66,8 +66,8 @@ describe('<App />', () => {
     await addPerson(user, 'Anna');
     await addPerson(user, 'Björn');
 
-    await user.type(screen.getByLabelText('Ny uppgift'), 'fixa lampan');
-    await user.selectOptions(screen.getByLabelText('Ansvarig'), 'Björn');
+    await user.type(screen.getByLabelText('Uppgift'), 'fixa lampan');
+    await user.selectOptions(screen.getByLabelText('Av vem'), 'Björn');
     await user.click(
       within(todosSection()).getByRole('button', { name: 'Lägg till' }),
     );

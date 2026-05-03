@@ -171,36 +171,44 @@ export default function App() {
 
       <section className="todos">
         <h2>Uppgifter</h2>
-        <form className="composer todo-composer" onSubmit={handleAddTodo}>
-          <input
-            aria-label="Ny uppgift"
-            placeholder={
-              me === null ? 'Välj vem du är först' : 'Vad behöver göras?'
-            }
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            disabled={me === null}
-          />
-          <input
-            aria-label="Senast (dag och tid)"
-            type="datetime-local"
-            value={draftDue}
-            onChange={(e) => setDraftDue(e.target.value)}
-            disabled={me === null}
-          />
-          <select
-            aria-label="Ansvarig"
-            value={draftAssignee}
-            onChange={(e) => setDraftAssignee(e.target.value)}
-            disabled={me === null || people.length === 0}
-          >
-            <option value="">Ingen ansvarig</option>
-            {people.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+        <form className="todo-composer" onSubmit={handleAddTodo}>
+          <div className="composer-grid">
+            <label className="col">
+              <span className="col-header">Uppgift</span>
+              <input
+                placeholder={
+                  me === null ? 'Välj vem du är först' : 'Vad behöver göras?'
+                }
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                disabled={me === null}
+              />
+            </label>
+            <label className="col">
+              <span className="col-header">Klart</span>
+              <input
+                type="datetime-local"
+                value={draftDue}
+                onChange={(e) => setDraftDue(e.target.value)}
+                disabled={me === null}
+              />
+            </label>
+            <label className="col">
+              <span className="col-header">Av vem</span>
+              <select
+                value={draftAssignee}
+                onChange={(e) => setDraftAssignee(e.target.value)}
+                disabled={me === null || people.length === 0}
+              >
+                <option value="">Ingen ansvarig</option>
+                {people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <button type="submit" disabled={!canAddTodo}>
             Lägg till
           </button>

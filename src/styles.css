@@ -64,8 +64,45 @@ section {
   min-width: 8rem;
 }
 
-.todo-composer input[aria-label='Ny uppgift'] {
-  flex: 2 1 12rem;
+.todo-composer {
+  margin-bottom: 0.75rem;
+}
+
+.composer-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.col-header {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+  font-weight: 600;
+}
+
+.col input,
+.col select {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.todo-composer > button {
+  width: 100%;
+}
+
+@media (max-width: 32rem) {
+  .composer-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 input,
