@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Designförslag — Todo-hanterare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=DM+Sans:wght@400;500;600&family=Fraunces:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Kalam:wght@400;700&family=Lora:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Source+Serif+4:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: #ececec;
+    font-family: -apple-system, system-ui, sans-serif;
+    color: #333;
+    padding: 2rem 1rem;
+  }
+  .page-title {
+    text-align: center;
+    margin: 0 0 0.5rem;
+    font-size: 2rem;
+    font-weight: 700;
+  }
+  .page-sub {
+    text-align: center;
+    margin: 0 0 2rem;
+    color: #666;
+  }
+  .nav {
+    position: sticky;
+    top: 0.5rem;
+    z-index: 10;
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+    background: rgba(236, 236, 236, 0.92);
+    padding: 0.75rem;
+    backdrop-filter: blur(8px);
+    border-radius: 999px;
+    max-width: 720px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .nav a {
+    padding: 0.4rem 0.85rem;
+    background: white;
+    border-radius: 999px;
+    text-decoration: none;
+    color: #333;
+    font-size: 0.875rem;
+    border: 1px solid #ddd;
+  }
+  .nav a:hover { background: #f5f5f5; }
+  .design {
+    max-width: 720px;
+    margin: 0 auto 4rem;
+  }
+  .design-label {
+    text-align: center;
+    margin: 0 0 1rem;
+    color: #555;
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .design-label strong {
+    display: block;
+    font-size: 1.5rem;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #1a1a1a;
+    margin-top: 0.25rem;
+  }
+
+  /* ========== Common mockup structure ========== */
+  .mock {
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+  }
+  .mock h1 { margin: 0; }
+  .mock h2 { margin: 0 0 0.75rem; }
+  .mock-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+  .mock-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    font-size: 0.875rem;
+  }
+  .mock-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .mock-grid > label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .col-h {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+  }
+  .mock input, .mock select, .mock button {
+    font: inherit;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #d4d4d8;
+    background: transparent;
+    color: inherit;
+  }
+  .mock button {
+    cursor: pointer;
+  }
+  .mock-filters {
+    display: flex;
+    gap: 0.25rem;
+    margin: 1rem 0;
+  }
+  .mock-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .mock-list li {
+    padding: 0.75rem 0;
+  }
+  .mock-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .mock-row .text { flex: 1; }
+  .mock-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    font-size: 0.8rem;
+    margin-top: 0.4rem;
+    margin-left: 1.5rem;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+  }
+  .check {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 4px;
+    border: 2px solid currentColor;
+    vertical-align: middle;
+  }
+  .check.done {
+    background: currentColor;
+    position: relative;
+  }
+  .check.done::after {
+    content: "✓";
+    color: white;
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  .strike { text-decoration: line-through; opacity: 0.55; }
+
+  /* ============================================ */
+  /* DESIGN 1: Skördens varma jord                */
+  /* ============================================ */
+  .d1 {
+    background: #FAF8F2;
+    color: #2C3E2E;
+    font-family: 'Inter', sans-serif;
+  }
+  .d1 h1, .d1 h2 {
+    font-family: 'Fraunces', serif;
+    color: #2C3E2E;
+    font-weight: 500;
+  }
+  .d1 h2 {
+    font-size: 0.95rem;
+    border-bottom: 1px solid #D4A24C;
+    padding-bottom: 0.25rem;
+    width: fit-content;
+  }
+  .d1 .col-h { color: #8a8273; }
+  .d1 input, .d1 select { background: white; border-color: #e0d8c4; }
+  .d1 button.primary {
+    background: #2C3E2E;
+    color: #FAF8F2;
+    border: none;
+  }
+  .d1 button.ghost {
+    background: transparent;
+    color: #2C3E2E;
+    border: 1px solid #D4A24C;
+  }
+  .d1 .filter {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #2C3E2E;
+    padding: 0.4rem 0.75rem;
+  }
+  .d1 .filter.active {
+    background: #2C3E2E;
+    color: #FAF8F2;
+    border-color: #2C3E2E;
+  }
+  .d1 .mock-list li { border-bottom: 1px dashed #D4A24C44; }
+  .d1 .badge.admin { background: #D4A24C; color: #2C3E2E; }
+  .d1 .open { background: rgba(212,162,76,0.08); border-radius: 8px; padding: 0.5rem; }
+  .d1 .due-warn { color: #C4663E; font-weight: 600; }
+  .d1 .ta {
+    background: #D4A24C;
+    color: #2C3E2E;
+    border: none;
+    border-radius: 999px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+
+  /* ============================================ */
+  /* DESIGN 2: Falu rött & vit panel              */
+  /* ============================================ */
+  .d2 {
+    background: #FDFCF8;
+    color: #1a1a1a;
+    font-family: 'IBM Plex Sans', sans-serif;
+    border: 1px solid #E8DDC9;
+  }
+  .d2 h1, .d2 h2 {
+    font-family: 'Newsreader', serif;
+    font-weight: 500;
+  }
+  .d2 h1 { color: #A23B26; font-size: 1.8rem; }
+  .d2 h2 {
+    font-size: 1rem;
+    background: #E8DDC9;
+    color: #1a1a1a;
+    padding: 0.4rem 0.75rem;
+    margin: 1.25rem -2rem 1rem;
+    border-left: 4px solid #A23B26;
+  }
+  .d2 input, .d2 select { background: white; border-color: #ccc; border-radius: 0; }
+  .d2 button.primary { background: #A23B26; color: white; border: 1px solid #A23B26; border-radius: 0; }
+  .d2 button.ghost { background: transparent; color: #A23B26; border: 1px solid #A23B26; border-radius: 0; }
+  .d2 .filter { border: 1px solid #ccc; border-radius: 0; padding: 0.4rem 0.85rem; background: white; }
+  .d2 .filter.active { background: #A23B26; color: white; border-color: #A23B26; }
+  .d2 .mock-list li { border-bottom: 1px solid #E8DDC9; }
+  .d2 .badge.admin { background: #A23B26; color: white; }
+  .d2 .open { background: #FAF5EC; padding: 0.5rem; }
+  .d2 .due-warn { color: #A23B26; font-weight: 600; }
+  .d2 .ta { background: #A23B26; color: white; border: none; padding: 0.2rem 0.6rem; font-size: 0.75rem; }
+
+  /* ============================================ */
+  /* DESIGN 3: Äng & morgondagg                   */
+  /* ============================================ */
+  .d3 {
+    background: linear-gradient(180deg, #F8FAF7 0%, #EAF2E5 100%);
+    color: #2D3A2D;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .d3 h1 { color: #2D3A2D; font-weight: 600; }
+  .d3 h2 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #7B9472;
+    font-weight: 600;
+  }
+  .d3 .col-h { color: #7B9472; }
+  .d3 input, .d3 select { background: white; border: 1px solid #D5DDD0; border-radius: 8px; }
+  .d3 button.primary {
+    background: #7B9472;
+    color: white;
+    border: none;
+    border-radius: 999px;
+    padding: 0.5rem 1.25rem;
+    box-shadow: 0 4px 12px rgba(123,148,114,0.25);
+  }
+  .d3 button.ghost {
+    background: white;
+    color: #7B9472;
+    border: 1px solid #D5DDD0;
+    border-radius: 999px;
+  }
+  .d3 .filter {
+    border: none;
+    background: transparent;
+    color: #7B9472;
+    padding: 0.4rem 0.85rem;
+    border-radius: 999px;
+  }
+  .d3 .filter.active { background: white; color: #2D3A2D; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .d3 .mock-list li { background: white; border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 0.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .d3 .badge.admin { background: #E8C547; color: #2D3A2D; }
+  .d3 .open { background: rgba(157,196,217,0.12); }
+  .d3 .due-warn { color: #C4663E; font-weight: 500; }
+  .d3 .ta { background: #9DC4D9; color: #2D3A2D; border: none; border-radius: 999px; padding: 0.25rem 0.7rem; font-size: 0.75rem; font-weight: 600; }
+
+  /* ============================================ */
+  /* DESIGN 4: Fältboken                          */
+  /* ============================================ */
+  .d4 {
+    background: #F4EFE3;
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(107,123,62,0.08) 32px),
+      radial-gradient(circle at 20% 80%, rgba(107,123,62,0.04), transparent 40%);
+    color: #1F1B17;
+    font-family: 'Lora', serif;
+    border: 1px solid #d8cdb6;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12), inset 0 0 60px rgba(159,135,87,0.08);
+  }
+  .d4 h1 { font-family: 'Caveat', cursive; font-size: 2.25rem; color: #1F1B17; font-weight: 700; }
+  .d4 h2 { font-family: 'Caveat', cursive; font-size: 1.5rem; color: #6B7B3E; font-weight: 700; }
+  .d4 .col-h { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: #6B7B3E; }
+  .d4 input, .d4 select { background: rgba(255,255,255,0.5); border: 1px solid #c9bea4; font-family: 'Lora', serif; }
+  .d4 button.primary {
+    background: #6B7B3E;
+    color: #F4EFE3;
+    border: none;
+    font-family: 'Caveat', cursive;
+    font-size: 1.1rem;
+    padding: 0.4rem 1rem;
+  }
+  .d4 button.ghost {
+    background: transparent;
+    color: #6B7B3E;
+    border: 1px dashed #6B7B3E;
+    font-family: 'Caveat', cursive;
+    font-size: 1rem;
+  }
+  .d4 .filter {
+    background: transparent;
+    border: none;
+    color: #1F1B17;
+    font-family: 'Caveat', cursive;
+    font-size: 1.15rem;
+    padding: 0.2rem 0.6rem;
+  }
+  .d4 .filter.active { color: #9E3838; text-decoration: underline; text-decoration-thickness: 2px; }
+  .d4 .mock-list li { border-bottom: 1px solid #c9bea455; padding: 0.6rem 0; }
+  .d4 .check { border-radius: 0; }
+  .d4 .badge.admin { background: #9E3838; color: #F4EFE3; font-family: 'JetBrains Mono', monospace; }
+  .d4 .open { background: rgba(107,123,62,0.07); padding: 0.5rem; border-left: 3px solid #6B7B3E; }
+  .d4 .due-warn { color: #9E3838; font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; }
+  .d4 .ta { background: #9E3838; color: #F4EFE3; border: none; font-family: 'Caveat', cursive; font-size: 1rem; padding: 0.1rem 0.55rem; }
+
+  /* ============================================ */
+  /* DESIGN 5: Modern lada                        */
+  /* ============================================ */
+  .d5 {
+    background: #1A1A1A;
+    color: #E8DDC9;
+    font-family: 'Inter', sans-serif;
+    border: 1px solid #2a2a2a;
+  }
+  .d5 h1 { font-family: 'Space Grotesk', sans-serif; color: #D9C7A7; font-weight: 600; letter-spacing: -0.01em; }
+  .d5 h2 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #A87B49;
+    border-bottom: 1px solid #A87B4955;
+    padding-bottom: 0.5rem;
+  }
+  .d5 .col-h { color: #888; }
+  .d5 input, .d5 select { background: #232323; border: 1px solid #3a3a3a; color: #E8DDC9; }
+  .d5 button.primary { background: #A87B49; color: #1A1A1A; border: none; font-weight: 500; }
+  .d5 button.ghost { background: transparent; color: #D9C7A7; border: 1px solid #3a3a3a; }
+  .d5 .filter {
+    background: transparent;
+    border: 1px solid #3a3a3a;
+    color: #888;
+    padding: 0.4rem 0.85rem;
+  }
+  .d5 .filter.active { background: #A87B49; color: #1A1A1A; border-color: #A87B49; }
+  .d5 .mock-list li {
+    background: linear-gradient(180deg, #232323 0%, #1f1f1f 100%);
+    border-radius: 6px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.4rem;
+    border: 1px solid #2a2a2a;
+  }
+  .d5 .badge.admin { background: #A87B49; color: #1A1A1A; }
+  .d5 .open { border: 1px solid #A87B4955; }
+  .d5 .due-warn { color: #6B2E2E; font-weight: 600; background: #6B2E2E22; padding: 0 0.35rem; border-radius: 3px; }
+  .d5 .ta { background: #A87B49; color: #1A1A1A; border: none; padding: 0.25rem 0.7rem; font-size: 0.75rem; font-weight: 500; border-radius: 4px; }
+
+</style>
+</head>
+<body>
+
+<h1 class="page-title">Designförslag</h1>
+<p class="page-sub">Fem riktningar för Todo-hanteraren — alla med samma innehåll. Klicka på siffrorna för att hoppa.</p>
+
+<nav class="nav">
+  <a href="#d1">1 · Skördens varma jord</a>
+  <a href="#d2">2 · Falu rött & vit panel</a>
+  <a href="#d3">3 · Äng & morgondagg</a>
+  <a href="#d4">4 · Fältboken</a>
+  <a href="#d5">5 · Modern lada</a>
+</nav>
+
+<!-- ============== DESIGN 1 ============== -->
+<section class="design" id="d1">
+  <p class="design-label">Förslag 1<strong>Skördens varma jord</strong></p>
+  <div class="mock d1">
+    <div class="mock-top">
+      <h1>Todo-hanterare</h1>
+      <div class="mock-actions">
+        <span>Daniel <span class="badge admin">admin</span></span>
+        <button class="ghost">Admin</button>
+        <button class="ghost">Logga ut</button>
+      </div>
+    </div>
+
+    <h2>Mitt konto</h2>
+    <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem;">
+      <input value="Daniel" style="flex:1" />
+      <button class="primary">Spara namn</button>
+    </div>
+
+    <h2>Uppgifter</h2>
+    <div class="mock-grid">
+      <label><span class="col-h">Uppgift</span><input placeholder="Vad behöver göras?" /></label>
+      <label><span class="col-h">Klart</span><input type="datetime-local" /></label>
+      <label><span class="col-h">Av vem</span><select><option>Till alla</option></select></label>
+    </div>
+    <button class="primary" style="width:100%; padding:0.6rem;">Lägg till</button>
+
+    <div class="mock-filters">
+      <button class="filter active">Alla</button>
+      <button class="filter">Aktiva</button>
+      <button class="filter">Klara</button>
+      <button class="filter">Arkiv</button>
+    </div>
+
+    <ul class="mock-list">
+      <li>
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Mocka stallet</span>
+          <button class="ghost" style="font-size:0.75rem; padding:0.2rem 0.55rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Anna</span>
+          <span class="due-warn">Senast: ti 14:00 (förfallen)</span>
+        </div>
+      </li>
+      <li class="open">
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Köpa hösilage</span>
+          <button class="ta">Ta</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Till alla</span>
+          <span>Senast: lö 09:00</span>
+        </div>
+      </li>
+      <li>
+        <div class="mock-row">
+          <span class="check done"></span>
+          <span class="text strike">Vaccinera kalvarna</span>
+          <button class="ghost" style="font-size:0.75rem; padding:0.2rem 0.55rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Anna</span>
+          <span>Ansvarig: Anna</span>
+          <span>Klar</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============== DESIGN 2 ============== -->
+<section class="design" id="d2">
+  <p class="design-label">Förslag 2<strong>Falu rött & vit panel</strong></p>
+  <div class="mock d2">
+    <div class="mock-top">
+      <h1>Todo-hanterare</h1>
+      <div class="mock-actions">
+        <span>Daniel <span class="badge admin">admin</span></span>
+        <button class="ghost">Admin</button>
+        <button class="ghost">Logga ut</button>
+      </div>
+    </div>
+
+    <h2>Mitt konto</h2>
+    <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem;">
+      <input value="Daniel" style="flex:1" />
+      <button class="primary">Spara namn</button>
+    </div>
+
+    <h2>Uppgifter</h2>
+    <div class="mock-grid">
+      <label><span class="col-h">Uppgift</span><input placeholder="Vad behöver göras?" /></label>
+      <label><span class="col-h">Klart</span><input type="datetime-local" /></label>
+      <label><span class="col-h">Av vem</span><select><option>Till alla</option></select></label>
+    </div>
+    <button class="primary" style="width:100%; padding:0.6rem;">Lägg till</button>
+
+    <div class="mock-filters">
+      <button class="filter active">Alla</button>
+      <button class="filter">Aktiva</button>
+      <button class="filter">Klara</button>
+      <button class="filter">Arkiv</button>
+    </div>
+
+    <ul class="mock-list">
+      <li>
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Mocka stallet</span>
+          <button class="ghost" style="font-size:0.75rem; padding:0.2rem 0.55rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Anna</span>
+          <span class="due-warn">Senast: ti 14:00 (förfallen)</span>
+        </div>
+      </li>
+      <li class="open">
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Köpa hösilage</span>
+          <button class="ta">Ta</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Till alla</span>
+          <span>Senast: lö 09:00</span>
+        </div>
+      </li>
+      <li>
+        <div class="mock-row">
+          <span class="check done"></span>
+          <span class="text strike">Vaccinera kalvarna</span>
+          <button class="ghost" style="font-size:0.75rem; padding:0.2rem 0.55rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Anna</span>
+          <span>Ansvarig: Anna</span>
+          <span>Klar</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============== DESIGN 3 ============== -->
+<section class="design" id="d3">
+  <p class="design-label">Förslag 3<strong>Äng & morgondagg</strong></p>
+  <div class="mock d3">
+    <div class="mock-top">
+      <h1>Todo-hanterare</h1>
+      <div class="mock-actions">
+        <span>Daniel <span class="badge admin">admin</span></span>
+        <button class="ghost">Admin</button>
+        <button class="ghost">Logga ut</button>
+      </div>
+    </div>
+
+    <h2>Mitt konto</h2>
+    <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem;">
+      <input value="Daniel" style="flex:1" />
+      <button class="primary">Spara namn</button>
+    </div>
+
+    <h2>Uppgifter</h2>
+    <div class="mock-grid">
+      <label><span class="col-h">Uppgift</span><input placeholder="Vad behöver göras?" /></label>
+      <label><span class="col-h">Klart</span><input type="datetime-local" /></label>
+      <label><span class="col-h">Av vem</span><select><option>Till alla</option></select></label>
+    </div>
+    <button class="primary" style="width:100%;">Lägg till</button>
+
+    <div class="mock-filters">
+      <button class="filter active">Alla</button>
+      <button class="filter">Aktiva</button>
+      <button class="filter">Klara</button>
+      <button class="filter">Arkiv</button>
+    </div>
+
+    <ul class="mock-list">
+      <li>
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Mocka stallet</span>
+          <button class="ghost" style="font-size:0.75rem; padding:0.2rem 0.55rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Anna</span>
+          <span class="due-warn">Senast: ti 14:00 (förfallen)</span>
+        </div>
+      </li>
+      <li class="open">
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Köpa hösilage</span>
+          <button class="ta">Ta</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Till alla</span>
+          <span>Senast: lö 09:00</span>
+        </div>
+      </li>
+      <li>
+        <div class="mock-row">
+          <span class="check done"></span>
+          <span class="text strike">Vaccinera kalvarna</span>
+          <button class="ghost" style="font-size:0.75rem; padding:0.2rem 0.55rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Anna</span>
+          <span>Ansvarig: Anna</span>
+          <span>Klar</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============== DESIGN 4 ============== -->
+<section class="design" id="d4">
+  <p class="design-label">Förslag 4<strong>Fältboken</strong></p>
+  <div class="mock d4">
+    <div class="mock-top">
+      <h1>Todo-hanterare</h1>
+      <div class="mock-actions">
+        <span>Daniel <span class="badge admin">admin</span></span>
+        <button class="ghost">Admin</button>
+        <button class="ghost">Logga ut</button>
+      </div>
+    </div>
+
+    <h2>Mitt konto</h2>
+    <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem;">
+      <input value="Daniel" style="flex:1" />
+      <button class="primary">Spara namn</button>
+    </div>
+
+    <h2>Uppgifter</h2>
+    <div class="mock-grid">
+      <label><span class="col-h">UPPGIFT</span><input placeholder="Vad behöver göras?" /></label>
+      <label><span class="col-h">KLART</span><input type="datetime-local" /></label>
+      <label><span class="col-h">AV VEM</span><select><option>Till alla</option></select></label>
+    </div>
+    <button class="primary" style="width:100%;">Lägg till</button>
+
+    <div class="mock-filters">
+      <button class="filter active">Alla</button>
+      <button class="filter">Aktiva</button>
+      <button class="filter">Klara</button>
+      <button class="filter">Arkiv</button>
+    </div>
+
+    <ul class="mock-list">
+      <li>
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Mocka stallet</span>
+          <button class="ghost" style="font-size:0.95rem; padding:0.05rem 0.45rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Anna</span>
+          <span class="due-warn">SENAST: TI 14:00</span>
+        </div>
+      </li>
+      <li class="open">
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Köpa hösilage</span>
+          <button class="ta">Ta</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Till alla</span>
+          <span>Senast: lö 09:00</span>
+        </div>
+      </li>
+      <li>
+        <div class="mock-row">
+          <span class="check done"></span>
+          <span class="text strike">Vaccinera kalvarna</span>
+          <button class="ghost" style="font-size:0.95rem; padding:0.05rem 0.45rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Anna</span>
+          <span>Ansvarig: Anna</span>
+          <span>Klar</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============== DESIGN 5 ============== -->
+<section class="design" id="d5">
+  <p class="design-label">Förslag 5<strong>Modern lada</strong></p>
+  <div class="mock d5">
+    <div class="mock-top">
+      <h1>Todo-hanterare</h1>
+      <div class="mock-actions">
+        <span>Daniel <span class="badge admin">admin</span></span>
+        <button class="ghost">Admin</button>
+        <button class="ghost">Logga ut</button>
+      </div>
+    </div>
+
+    <h2>Mitt konto</h2>
+    <div style="display:flex; gap:0.5rem; margin-bottom:1.5rem;">
+      <input value="Daniel" style="flex:1" />
+      <button class="primary">Spara namn</button>
+    </div>
+
+    <h2>Uppgifter</h2>
+    <div class="mock-grid">
+      <label><span class="col-h">Uppgift</span><input placeholder="Vad behöver göras?" /></label>
+      <label><span class="col-h">Klart</span><input type="datetime-local" /></label>
+      <label><span class="col-h">Av vem</span><select><option>Till alla</option></select></label>
+    </div>
+    <button class="primary" style="width:100%;">Lägg till</button>
+
+    <div class="mock-filters">
+      <button class="filter active">Alla</button>
+      <button class="filter">Aktiva</button>
+      <button class="filter">Klara</button>
+      <button class="filter">Arkiv</button>
+    </div>
+
+    <ul class="mock-list">
+      <li>
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Mocka stallet</span>
+          <button class="ghost" style="font-size:0.75rem; padding:0.2rem 0.55rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Anna</span>
+          <span class="due-warn">Senast: ti 14:00 (förfallen)</span>
+        </div>
+      </li>
+      <li class="open">
+        <div class="mock-row">
+          <span class="check"></span>
+          <span class="text">Köpa hösilage</span>
+          <button class="ta">Ta</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Daniel</span>
+          <span>Ansvarig: Till alla</span>
+          <span>Senast: lö 09:00</span>
+        </div>
+      </li>
+      <li>
+        <div class="mock-row">
+          <span class="check done"></span>
+          <span class="text strike">Vaccinera kalvarna</span>
+          <button class="ghost" style="font-size:0.75rem; padding:0.2rem 0.55rem;">×</button>
+        </div>
+        <div class="mock-meta">
+          <span>Av: Anna</span>
+          <span>Ansvarig: Anna</span>
+          <span>Klar</span>
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<p style="text-align:center; color:#666; font-size:0.85rem; margin-top:3rem;">
+  Säg till vilken siffra du vill köra på, så bygger jag.
+</p>
+
+</body>
+</html>
