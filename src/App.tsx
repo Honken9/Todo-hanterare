@@ -660,6 +660,7 @@ function Workspace({ session }: { session: Session }) {
                         <>
                           {isOpen && t.createdBy !== me.id && (
                             <button
+                              className="take"
                               aria-label={`Ta ${t.text}`}
                               onClick={() => void handleTake(t)}
                             >
