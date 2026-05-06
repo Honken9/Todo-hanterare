@@ -56,11 +56,6 @@ export async function updateProfile(
   if (error) throw error;
 }
 
-export async function deleteProfile(id: string): Promise<void> {
-  const { error } = await supabase.from('profiles').delete().eq('id', id);
-  if (error) throw error;
-}
-
 export async function fetchTodos(): Promise<Todo[]> {
   const { data, error } = await supabase
     .from('todos')
@@ -132,6 +127,33 @@ export async function inviteUser(email: string): Promise<void> {
       authorization: `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({ email }),
+  });
+
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const data = (await res.json()) as { error?: string };
+      if (data.error) message = data.error;
+    } catch {
+      // ignore body parse error
+    }
+    throw new Error(message);
+  }
+}
+
+export async function removeUser(userId: string): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) throw new Error('Inte inloggad');
+
+  const res = await fetch('/api/delete-user', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ userId }),
   });
 
   if (!res.ok) {

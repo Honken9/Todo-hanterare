@@ -43,6 +43,7 @@ The service role key is in Supabase → Settings → API → "service_role". It 
 - `src/Auth.tsx` — email + password login. Two modes (`login` / `reset`). Reset calls `supabase.auth.resetPasswordForEmail`.
 - `src/SetPassword.tsx` — full-screen "set your password" form rendered after an invite or recovery link is clicked. Calls `supabase.auth.updateUser({ password })` then clears `window.location.hash`.
 - `api/invite.ts` — Vercel Edge Function. Verifies the caller's JWT with the service-role client, checks `profiles.is_admin`, then calls `supabase.auth.admin.inviteUserByEmail(email, { redirectTo: origin })`. Reads `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from env.
+- `api/delete-user.ts` — Vercel Edge Function. Same admin gate as invite, then calls `supabase.auth.admin.deleteUser(userId)`. Refuses to delete the caller's own user. The cascade on `profiles.id` cleans up the profile row.
 - `src/App.tsx` — top-level component. Listens to `supabase.auth.onAuthStateChange`. Routes to one of three views based on session + URL hash + auth event:
   - `<Auth />` if no session
   - `<SetPassword reason="invite|recovery">` if URL hash had `type=invite|recovery` on load, or if a `PASSWORD_RECOVERY` event fired
@@ -50,6 +51,7 @@ The service role key is in Supabase → Settings → API → "service_role". It 
   `Workspace` fetches the current user's profile + the global lists, subscribes to real-time changes, and uses optimistic updates that revert on API errors. Admin section includes an invite form that POSTs to `/api/invite`.
 - `supabase/migrations/0001_initial_schema.sql` — original people/todos schema (superseded).
 - `supabase/migrations/0002_profiles_and_roles.sql` — current schema. Drops the old people table, creates `profiles` 1:1 with `auth.users`, an admin role flag, an auto-create trigger on signup (first user is admin), and a per-row visibility model in RLS.
+- `supabase/migrations/0003_admin_escalation_trigger.sql` — replaces the WITH CHECK subquery on `user update own profile` with a `BEFORE UPDATE OF is_admin` trigger that explicitly rejects non-admins changing the flag. Clearer to audit than the subquery semantics.
 
 ## Auth, profiles, and visibility
 

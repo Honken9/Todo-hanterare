@@ -4,13 +4,13 @@ import type { Filter, Profile, Todo } from './types';
 import { supabase } from './lib/supabase';
 import {
   changePassword,
-  deleteProfile,
   deleteTodo,
   fetchMyProfile,
   fetchProfiles,
   fetchTodos,
   insertTodo,
   inviteUser,
+  removeUser,
   subscribeChanges,
   updateProfile,
   updateTodo,
@@ -349,7 +349,7 @@ function Workspace({ session }: { session: Session }) {
       return;
     }
     try {
-      await deleteProfile(profile.id);
+      await removeUser(profile.id);
       void reloadProfiles();
       void reloadTodos();
     } catch (e) {
